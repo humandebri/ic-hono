@@ -134,6 +134,9 @@ expect_contains 'body = blob "ic"' call_update GET /bytes ''
 expect_contains '\\22first\\22:105' call_update POST /body-bytes '\69\63'
 expect_contains 'body = blob "stored"' call_update GET /cache-put ''
 expect_contains 'body = blob "cached"' call_update GET /cache-get ''
+expect_contains 'body = blob "missing"' call_update GET /cache-expired ''
+time_output="$(call_update GET /time '')"
+grep -Eq 'body = blob "[0-9]+"' <<<"$time_output"
 runtime_info_after_requests="$(icp canister call edge runtime_info '()' --environment local)"
 [[ "$runtime_info_after_requests" == "$runtime_info_before_requests" ]]
 expect_contains 'access-control-allow-origin' call_update OPTIONS / '' 'vec { record { "Origin"; "https://example.com" }; record { "Access-Control-Request-Method"; "POST" } }'
@@ -153,7 +156,20 @@ curl -fsS "${GATEWAY_URL%/}/bytes?canisterId=${CANISTER_ID}" | grep -qx 'ic'
 curl -fsS -X POST \
   --data 'ic' \
   "${GATEWAY_URL%/}/body-bytes?canisterId=${CANISTER_ID}" | grep -qx '{"first":105,"length":2}'
+curl -fsS "${GATEWAY_URL%/}/cache-expired?canisterId=${CANISTER_ID}" | grep -qx 'missing'
+curl -fsS "${GATEWAY_URL%/}/time?canisterId=${CANISTER_ID}" | grep -Eq '^[0-9]+$'
 curl -fsSI "$BASE_URL" | grep -qi '^access-control-allow-origin:'
+
+binary_bundle="$LOG_DIR/binary-echo.bundle.js"
+cat >"$binary_bundle" <<'JS'
+var __ic_edge_bundle = (() => ({
+  default: {
+    fetch: async (request) => new Response(new Uint8Array(await request.arrayBuffer()))
+  }
+}))();
+JS
+upload_example "$binary_bundle"
+expect_contains 'body = blob "\\ff\\00\\80"' call_update POST /binary '\ff\00\80'
 
 pack_example examples/hono-zod/src/app.ts examples/hono-zod/dist/app.bundle.js
 upload_example examples/hono-zod/dist/app.bundle.js

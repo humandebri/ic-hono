@@ -151,10 +151,10 @@ impl EdgeRuntime for QuickJsRuntime {
                 .map_err(|error| {
                     rquickjs::Error::new_from_js_message("Headers", "String", error.to_string())
                 })?;
-                let body = request.body.text().map_err(|error| {
-                    rquickjs::Error::new_from_js_message("Body", "String", format!("{error:?}"))
+                let body_json = serde_json::to_string(request.body.bytes()).map_err(|error| {
+                    rquickjs::Error::new_from_js_message("Body", "JSON", error.to_string())
                 })?;
-                dispatch.call::<_, ()>((request.method, request.url, headers_json, body))
+                dispatch.call::<_, ()>((request.method, request.url, headers_json, body_json))
             })
             .map_err(to_runtime_error)?;
         self.drain_jobs()?;
@@ -167,7 +167,7 @@ fn host_fetch<F>(
     method: String,
     url: String,
     headers_json: String,
-    body: String,
+    body_json: String,
 ) -> rquickjs::Result<String>
 where
     F: HostFetch,
@@ -175,11 +175,13 @@ where
     let pairs: Vec<(String, String)> = serde_json::from_str(&headers_json).map_err(|error| {
         rquickjs::Error::new_from_js_message("Headers", "Headers", error.to_string())
     })?;
+    let body = serde_json::from_str(&body_json)
+        .map_err(|error| rquickjs::Error::new_from_js_message("Body", "Body", error.to_string()))?;
     let request = Request::new(
         method,
         url,
         Headers::from_pairs(pairs).map_err(to_js_error)?,
-        Body::from_bytes(body.into_bytes()),
+        Body::from_bytes(body),
     );
     let response = fetcher.borrow_mut().fetch(request).map_err(to_js_error)?;
     RuntimeResponse::from_response(response).map_err(to_js_error)

@@ -36,8 +36,9 @@ impl CacheHost for StableCacheHost {
 }
 
 fn cache_match(store: &StableEdgeStore, cache_name: &str, key: &str) -> Result<Option<String>> {
+    let storage_key = cache_key(cache_name, key)?;
     store
-        .get_kv(&cache_key(cache_name, key))
+        .get_kv(&storage_key)
         .map_err(store_error)?
         .map(String::from_utf8)
         .transpose()
@@ -64,6 +65,7 @@ fn cache_put(
     if total > limits::MAX_CACHE_TOTAL_BYTES {
         return Err(Error::Runtime("cache total exceeds v1 limit".to_string()));
     }
+    let storage_key = cache_key(cache_name, key)?;
     index.retain(|entry| !(entry.cache_name == cache_name && entry.key == key));
     index.push(CacheIndexEntry {
         cache_name: cache_name.to_string(),
@@ -71,20 +73,19 @@ fn cache_put(
         size,
     });
     store
-        .put_kv(&cache_key(cache_name, key), response_json.as_bytes())
+        .put_kv(&storage_key, response_json.as_bytes())
         .map_err(store_error)?;
     write_index(store, &index)
 }
 
 fn cache_delete(store: &mut StableEdgeStore, cache_name: &str, key: &str) -> Result<bool> {
+    let storage_key = cache_key(cache_name, key)?;
     let mut index = read_index(store)?;
     let before = index.len();
     index.retain(|entry| !(entry.cache_name == cache_name && entry.key == key));
     let deleted = index.len() != before;
     if deleted {
-        store
-            .delete_kv(&cache_key(cache_name, key))
-            .map_err(store_error)?;
+        store.delete_kv(&storage_key).map_err(store_error)?;
         write_index(store, &index)?;
     }
     Ok(deleted)
@@ -102,8 +103,10 @@ fn write_index(store: &mut StableEdgeStore, index: &[CacheIndexEntry]) -> Result
     store.put_kv(CACHE_INDEX_KEY, &bytes).map_err(store_error)
 }
 
-fn cache_key(cache_name: &str, key: &str) -> String {
-    format!("cache:{cache_name}\nGET\n{key}")
+fn cache_key(cache_name: &str, key: &str) -> Result<String> {
+    let encoded = serde_json::to_string(&(cache_name, "GET", key))
+        .map_err(|error| Error::Runtime(error.to_string()))?;
+    Ok(format!("cache:{encoded}"))
 }
 
 fn store_error(error: ic_edge_store::Error) -> Error {

@@ -19,7 +19,7 @@ globalThis.fetch = (input, init = {}) => {
     for (const [name, value] of new Headers(init.headers)) headers.set(name, value)
   }
   const body = init.body || (isRequest ? input.body : '')
-  const bodyValue = body instanceof Uint8Array ? Array.from(body) : body_text(body_from(body))
+  const bodyValue = Array.from(body_bytes(body_from(body)))
   const id = globalThis.__ic_edge_fetch_next_id++
   globalThis.__ic_edge_fetch_requests.push({
     id,

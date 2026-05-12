@@ -184,6 +184,10 @@ fn handle_uploaded_bundle(request: CdkHttpRequest) -> ic_edge_web::Result<CdkHtt
 async fn handle_uploaded_bundle_async(
     request: CdkHttpRequest,
 ) -> ic_edge_web::Result<CdkHttpResponse> {
+    let seed = raw_rand()
+        .await
+        .map_err(|error| ic_edge_web::Error::Runtime(format!("{error:?}")))?;
+    let time_nanos = ic_cdk::api::time();
     let generation = STORE.with_borrow(read_generation);
     let source = STORE
         .with_borrow(|store| store.get_module("app"))
@@ -191,11 +195,9 @@ async fn handle_uploaded_bundle_async(
     let source = String::from_utf8(source)
         .map_err(|error| ic_edge_web::Error::Runtime(error.to_string()))?;
     let env = env_script()?;
-    let seed = raw_rand()
-        .await
-        .map_err(|error| ic_edge_web::Error::Runtime(format!("{error:?}")))?;
     let mut runtime = take_runtime(generation, &env, &source)?;
     runtime.install_random_seed(seed)?;
+    runtime.install_time_nanos(time_nanos)?;
     let response = handle_cdk_http_async(&mut runtime, request).await;
     store_runtime(generation, runtime);
     response

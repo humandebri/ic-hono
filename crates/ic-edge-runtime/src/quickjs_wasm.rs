@@ -49,6 +49,17 @@ impl QuickJsRuntime {
         quickjs_wasm_crypto::install_random_seed(&self.context, seed)
     }
 
+    pub fn install_time_nanos(&self, time_nanos: u64) -> Result<()> {
+        let script = format!(
+            "globalThis.ic ||= {{}}; globalThis.ic.time = () => BigInt({})",
+            json_string(&time_nanos.to_string())?
+        );
+        self.context
+            .eval_global("ic-time.js", &script)
+            .map_err(to_runtime_error)?;
+        Ok(())
+    }
+
     fn install_web_polyfill(&self) -> Result<()> {
         quickjs_wasm_crypto::install_callbacks(&self.context)?;
         quickjs_wasm_cache::install(&self.context, Rc::clone(&self.cache_host))?;
@@ -113,13 +124,14 @@ impl QuickJsRuntime {
     fn dispatch_request(&self, request: Request) -> Result<()> {
         let headers_json = serde_json::to_string(&HeaderPairs::from_headers(&request.headers))
             .map_err(|error| Error::Runtime(error.to_string()))?;
-        let body = request.body.text()?;
+        let body_json = serde_json::to_string(request.body.bytes())
+            .map_err(|error| Error::Runtime(error.to_string()))?;
         let script = format!(
             "globalThis.__ic_edge_dispatch({}, {}, {}, {})",
             json_string(&request.method)?,
             json_string(&request.url)?,
             json_string(&headers_json)?,
-            json_string(&body)?
+            json_string(&body_json)?
         );
         self.context
             .eval_global("dispatch.js", &script)

@@ -31,6 +31,18 @@ class URLSearchParams {
     const found = this.values.find(([item]) => item === key)
     return found ? found[1] : null
   }
+  getAll(name) {
+    const key = String(name)
+    return this.values.filter(([item]) => item === key).map(([, value]) => value)
+  }
+  has(name) {
+    const key = String(name)
+    return this.values.some(([item]) => item === key)
+  }
+  delete(name) {
+    const key = String(name)
+    this.values = this.values.filter(([item]) => item !== key)
+  }
   entries() {
     return this.values[Symbol.iterator]()
   }
@@ -44,8 +56,19 @@ class URLSearchParams {
       .map(([name, value]) => `${encodeURIComponent(name)}=${encodeURIComponent(value)}`)
       .join('&')
   }
+  sort() {
+    this.values.sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
+  }
+  forEach(callback, thisArg = undefined) {
+    for (const [name, value] of this.values) {
+      callback.call(thisArg, value, name, this)
+    }
+  }
   [Symbol.iterator]() {
     return this.values[Symbol.iterator]()
+  }
+  get [Symbol.toStringTag]() {
+    return 'URLSearchParams'
   }
 }
 
@@ -91,6 +114,9 @@ class FormData {
   }
   [Symbol.iterator]() {
     return this.values[Symbol.iterator]()
+  }
+  get [Symbol.toStringTag]() {
+    return 'FormData'
   }
 }
 

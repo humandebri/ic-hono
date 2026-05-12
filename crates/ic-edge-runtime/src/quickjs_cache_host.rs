@@ -60,16 +60,17 @@ pub(crate) struct MemoryCacheHost {
 
 impl CacheHost for MemoryCacheHost {
     fn match_entry(&mut self, cache_name: &str, key: &str) -> Result<Option<String>> {
-        Ok(self.entries.get(&cache_key(cache_name, key)).cloned())
+        Ok(self.entries.get(&cache_key(cache_name, key)?).cloned())
     }
 
     fn put_entry(&mut self, cache_name: &str, key: &str, response_json: &str) -> Result<()> {
         if response_json.len() > limits::MAX_CACHE_ENTRY_BYTES {
             return Err(Error::Runtime("cache entry exceeds v1 limit".to_string()));
         }
+        let storage_key = cache_key(cache_name, key)?;
         let old_size = self
             .entries
-            .get(&cache_key(cache_name, key))
+            .get(&storage_key)
             .map(|value| value.len())
             .unwrap_or(0);
         let total =
@@ -77,18 +78,19 @@ impl CacheHost for MemoryCacheHost {
         if total > limits::MAX_CACHE_TOTAL_BYTES {
             return Err(Error::Runtime("cache total exceeds v1 limit".to_string()));
         }
-        self.entries
-            .insert(cache_key(cache_name, key), response_json.to_string());
+        self.entries.insert(storage_key, response_json.to_string());
         Ok(())
     }
 
     fn delete_entry(&mut self, cache_name: &str, key: &str) -> Result<bool> {
-        Ok(self.entries.remove(&cache_key(cache_name, key)).is_some())
+        Ok(self.entries.remove(&cache_key(cache_name, key)?).is_some())
     }
 }
 
-fn cache_key(cache_name: &str, key: &str) -> String {
-    format!("{cache_name}\nGET\n{key}")
+fn cache_key(cache_name: &str, key: &str) -> Result<String> {
+    let encoded = serde_json::to_string(&(cache_name, "GET", key))
+        .map_err(|error| Error::Runtime(error.to_string()))?;
+    Ok(format!("cache:{encoded}"))
 }
 
 fn to_js_error(error: Error) -> rquickjs::Error {

@@ -4,7 +4,7 @@
 pub const SOURCE: &str = r#"
 class Headers {
   constructor(init = []) {
-    this.values = []
+    this._values = []
     if (init instanceof Headers) {
       init = init.entriesArray()
     } else if (!Array.isArray(init)) {
@@ -13,58 +13,93 @@ class Headers {
     for (const [name, value] of init) this.append(name, value)
   }
   append(name, value) {
-    this.values.push([String(name).toLowerCase(), String(value)])
+    this._values.push([String(name).toLowerCase(), String(value)])
   }
   set(name, value) {
     const key = String(name).toLowerCase()
-    this.values = this.values.filter(([item]) => item !== key)
-    this.values.push([key, String(value)])
+    this._values = this._values.filter(([item]) => item !== key)
+    this._values.push([key, String(value)])
   }
   delete(name) {
     const key = String(name).toLowerCase()
-    this.values = this.values.filter(([item]) => item !== key)
+    this._values = this._values.filter(([item]) => item !== key)
   }
   get(name) {
     const key = String(name).toLowerCase()
-    const found = this.values.filter(([item]) => item === key).map(([, value]) => value)
+    const found = this._values.filter(([item]) => item === key).map(([, value]) => value)
     return found.length === 0 ? null : found.join(', ')
   }
   has(name) {
     const key = String(name).toLowerCase()
-    return this.values.some(([item]) => item === key)
+    return this._values.some(([item]) => item === key)
   }
   forEach(callback, thisArg = undefined) {
-    for (const [name, value] of this.values) {
+    for (const [name, value] of this._values) {
       callback.call(thisArg, value, name, this)
     }
   }
   entries() {
-    return this.values[Symbol.iterator]()
+    return this._values[Symbol.iterator]()
+  }
+  keys() {
+    return this._values.map(([name]) => name)[Symbol.iterator]()
+  }
+  values() {
+    return this._values.map(([, value]) => value)[Symbol.iterator]()
+  }
+  getSetCookie() {
+    return this._values.filter(([name]) => name === 'set-cookie').map(([, value]) => value)
   }
   [Symbol.iterator]() {
-    return this.values[Symbol.iterator]()
+    return this._values[Symbol.iterator]()
   }
   entriesArray() {
-    return this.values
+    return this._values
+  }
+  get [Symbol.toStringTag]() {
+    return 'Headers'
   }
 }
 
 class Request {
   constructor(input, init = {}) {
-    this.url = String(input)
-    this.method = String(init.method || 'GET').toUpperCase()
-    this.headers = new Headers(init.headers || [])
-    this._body = body_from(init.body || '')
-    this.signal = init.signal
+    const isRequest = input instanceof Request
+    const hasBody = Object.prototype.hasOwnProperty.call(init, 'body')
+    this.url = isRequest ? input.url : String(input)
+    this.method = String(init.method || (isRequest ? input.method : 'GET')).toUpperCase()
+    this.headers = init.headers ? new Headers(init.headers) : new Headers(isRequest ? input.headers : [])
+    this._body = body_from(hasBody ? init.body : (isRequest ? input.body : ''))
+    this.signal = init.signal || (isRequest ? input.signal : undefined)
+    this.bodyUsed = false
   }
   text() {
-    return Promise.resolve(body_text(this._body))
+    return Promise.resolve(body_text(consume_body(this)))
   }
   json() {
-    return Promise.resolve(JSON.parse(body_text(this._body)))
+    return Promise.resolve(JSON.parse(body_text(consume_body(this))))
   }
   arrayBuffer() {
-    return Promise.resolve(body_bytes(this._body).buffer)
+    return Promise.resolve(body_bytes(consume_body(this)).buffer)
+  }
+  get body() {
+    return this._body
+  }
+  formData() {
+    const contentType = this.headers.get('content-type') || ''
+    if (!contentType.toLowerCase().split(';')[0].trim().endsWith('application/x-www-form-urlencoded')) {
+      return Promise.reject(new TypeError('formData only supports application/x-www-form-urlencoded'))
+    }
+    const form = new FormData()
+    const params = new URLSearchParams(body_text(consume_body(this)))
+    for (const [name, value] of params) form.append(name, value)
+    return Promise.resolve(form)
+  }
+  clone() {
+    if (this.bodyUsed) throw new TypeError('Body has already been used')
+    return new Request(this)
+  }
+  get [Symbol.toStringTag]() {
+    return 'Request'
   }
 }
 
@@ -74,6 +109,10 @@ class Response {
     this.statusText = init.statusText || ''
     this.headers = new Headers(init.headers || [])
     this._body = body_from(body === null ? '' : body)
+    this.bodyUsed = false
+    this.url = ''
+    this.redirected = false
+    this.type = 'default'
   }
   get ok() {
     return this.status >= 200 && this.status < 300
@@ -82,18 +121,39 @@ class Response {
     return this._body
   }
   text() {
-    return Promise.resolve(body_text(this._body))
+    return Promise.resolve(body_text(consume_body(this)))
   }
   json() {
-    return Promise.resolve(JSON.parse(body_text(this._body)))
+    return Promise.resolve(JSON.parse(body_text(consume_body(this))))
   }
   arrayBuffer() {
-    return Promise.resolve(body_bytes(this._body).buffer)
+    return Promise.resolve(body_bytes(consume_body(this)).buffer)
+  }
+  formData() {
+    const contentType = this.headers.get('content-type') || ''
+    if (!contentType.toLowerCase().split(';')[0].trim().endsWith('application/x-www-form-urlencoded')) {
+      return Promise.reject(new TypeError('formData only supports application/x-www-form-urlencoded'))
+    }
+    const form = new FormData()
+    const params = new URLSearchParams(body_text(consume_body(this)))
+    for (const [name, value] of params) form.append(name, value)
+    return Promise.resolve(form)
+  }
+  clone() {
+    if (this.bodyUsed) throw new TypeError('Body has already been used')
+    return new Response(this._body, {
+      status: this.status,
+      statusText: this.statusText,
+      headers: this.headers
+    })
   }
   static json(value, init = {}) {
     const response = new Response(JSON.stringify(value), init)
     response.headers.set('content-type', 'application/json')
     return response
+  }
+  get [Symbol.toStringTag]() {
+    return 'Response'
   }
 }
 
@@ -172,6 +232,7 @@ class TextDecoder {
   }
 }
 const body_from = (value = '') => {
+  if (value === null || value === undefined) return ''
   if (value instanceof Uint8Array) return new Uint8Array(value)
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
   return String(value)
@@ -182,6 +243,12 @@ const body_bytes = (value = '') => {
 
 const body_text = (value = '') => {
   return value instanceof Uint8Array ? new TextDecoder().decode(value) : String(value)
+}
+
+const consume_body = (target) => {
+  if (target.bodyUsed) throw new TypeError('Body has already been used')
+  target.bodyUsed = true
+  return target._body
 }
 
 const setTimeout = (_callback, _ms = 0) => 0

@@ -67,6 +67,9 @@ expect "$basic_body_bytes" '{"first":105,"length":2}' "hono-basic POST /body-byt
 basic_cache="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-basic/dist/app.bundle.js GET /cache-roundtrip '')"
 expect "$basic_cache" "cached" "hono-basic GET /cache-roundtrip"
 
+basic_cache_expired="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-basic/dist/app.bundle.js GET /cache-expired '')"
+expect "$basic_cache_expired" "missing" "hono-basic GET /cache-expired"
+
 cors_headers="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-basic/dist/app.bundle.js GET / '' --show-response)"
 grep -q 'header: access-control-allow-origin: \*' <<<"$cors_headers" || {
   echo "smoke failed: hono-basic CORS header missing" >&2

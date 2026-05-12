@@ -31,6 +31,8 @@ Outbound は JS `fetch("https://...")` のみ HTTPS outcall に接続する。pl
 
 公開 API は compatibility matrix に記録した subset のみ。Node core modules、filesystem、process mutation、DOM、streams full support は非対応。
 
+`http_request_update` は `raw_rand().await` 完了後に generation / bundle / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`upload_bundle()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
+
 ## Cache
 
 Worker Cache API subset は canister stable memory に保存する。global CDN cache ではない。`cache.put()` は GET key のみ許可し、`206`、`Vary: *`、`Set-Cookie` response を拒否する。

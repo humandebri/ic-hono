@@ -2,6 +2,9 @@
 //! Keeping dispatch separate lets the core Web API subset stay compact.
 
 pub const SOURCE: &str = r#"
+const __ic_edge_body_json = (body) => JSON.stringify(Array.from(body_bytes(body_from(body))))
+const __ic_edge_body_from_json = (bodyJson) => new Uint8Array(JSON.parse(bodyJson))
+
 globalThis.fetch = (input, init = {}) => {
   const signal = init.signal || (input instanceof Request ? input.signal : undefined)
   if (signal && signal.aborted) {
@@ -22,7 +25,7 @@ globalThis.fetch = (input, init = {}) => {
     method,
     url,
     JSON.stringify(headers.entriesArray()),
-    body_text(body_from(body))
+    __ic_edge_body_json(body)
   )
   const response = JSON.parse(responseJson)
   const responseBody = Array.isArray(response.body) ? new Uint8Array(response.body) : response.body
@@ -32,23 +35,20 @@ globalThis.fetch = (input, init = {}) => {
   }))
 }
 
-globalThis.__ic_edge_dispatch = (method, url, headersJson, body) => {
+globalThis.__ic_edge_dispatch = (method, url, headersJson, bodyJson) => {
   const requestUrl = url.startsWith('http://') || url.startsWith('https://')
     ? url
     : `https://ic-edge.local${url.startsWith('/') ? url : `/${url}`}`
-  const request = new Request(requestUrl, { method, headers: JSON.parse(headersJson), body })
+  const request = new Request(requestUrl, { method, headers: JSON.parse(headersJson), body: __ic_edge_body_from_json(bodyJson) })
   globalThis.__ic_edge_output = undefined
   globalThis.__ic_edge_error = undefined
   globalThis.__ic_edge_console_error = undefined
   Promise.resolve(globalThis.__ic_edge_app.fetch(request)).then((response) => {
-    return Promise.resolve(response.text()).then((bodyText) => {
-      const bodyValue = response.body instanceof Uint8Array
-        ? Array.from(response.body)
-        : bodyText
+    return Promise.resolve(response).then((response) => {
       globalThis.__ic_edge_output = JSON.stringify({
         status: response.status,
         headers: response.headers.entriesArray(),
-        body: bodyValue
+        body: Array.from(body_bytes(body_from(response.body)))
       })
     })
   }).catch((error) => {

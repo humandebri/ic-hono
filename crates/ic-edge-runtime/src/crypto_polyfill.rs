@@ -26,6 +26,12 @@ const __ic_edge_from_json_bytes = (value) => {
   return new Uint8Array(JSON.parse(value)).buffer
 }
 
+const __ic_edge_is_integer_typed_array = (value) => {
+  if (!ArrayBuffer.isView(value) || value instanceof DataView) return false
+  if (value instanceof Float32Array || value instanceof Float64Array) return false
+  return true
+}
+
 globalThis.atob = (value) => {
   const clean = String(value).replace(/=+$/, '')
   let output = ''
@@ -63,8 +69,14 @@ globalThis.btoa = (value) => {
 
 const crypto = {
   getRandomValues: (array) => {
-    const bytes = JSON.parse(globalThis.__ic_edge_crypto_random(array.length))
-    for (let i = 0; i < array.length; i++) array[i] = bytes[i]
+    if (!__ic_edge_is_integer_typed_array(array)) {
+      throw new TypeError('crypto.getRandomValues requires an integer TypedArray')
+    }
+    if (array.byteLength > 65536) {
+      throw new Error('crypto.getRandomValues exceeds 65536 bytes')
+    }
+    const bytes = JSON.parse(globalThis.__ic_edge_crypto_random(array.byteLength))
+    new Uint8Array(array.buffer, array.byteOffset, array.byteLength).set(bytes)
     return array
   },
   subtle: {

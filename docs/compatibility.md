@@ -36,18 +36,18 @@ Durable Edge Runtime on ICP v1 preview の互換性状況。crate semver は `0.
 
 | API | Status | Note |
 | --- | --- | --- |
-| `Request` | partial | method / url / headers / text / json / arrayBuffer |
-| `Response` | partial | status / headers / text / json / arrayBuffer / `Response.json`; host は `Uint8Array` body smoke 済み |
-| `Headers` | partial | append / set / delete / get / has / forEach / iteration |
+| `Request` | partial | method / url / headers / bodyUsed / clone / text / json / arrayBuffer / urlencoded formData |
+| `Response` | partial | status / statusText / headers / bodyUsed / clone / url / redirected / type / text / json / arrayBuffer / `Response.json`; host は `Uint8Array` body smoke 済み |
+| `Headers` | partial | append / set / delete / get / has / forEach / entries / keys / values / getSetCookie / iteration |
 | `URL` | minimal | absolute URL と base 付き path |
-| `URLSearchParams` | partial | string / array / object init、append / set / get / toString、`+` decode |
+| `URLSearchParams` | partial | string / array / object init、append / set / get / getAll / has / delete / sort / forEach / toString、`+` decode |
 | `TextEncoder` | pass | UTF-8 encode を unit test 済み |
 | `TextDecoder` | pass | UTF-8 decode を unit test 済み |
 | `Blob` | minimal | string / `Uint8Array` parts、text / arrayBuffer |
-| `FormData` | minimal | append / get / entries |
+| `FormData` | partial | append / get / entries。`Request.formData()` は urlencoded body に対応 |
 | `AbortController` / `AbortSignal` | minimal | abort 済み `fetch()` を outcall 前に reject |
 | `fetch` | pass | host bridge / async queue / HTTPS outcall direct smoke |
-| `Cache` / `caches` | partial | `caches.default`、`caches.open`、`match` / `put` / `delete`。canister stable memory に保存。TTL、Range、conditional request は非対応 |
+| `Cache` / `caches` | partial | `caches.default`、`caches.open`、`match` / `put` / `delete`。canister stable memory に保存。`Cache-Control: max-age=N` expiration 対応。Range、conditional request は非対応 |
 | Streams | unsupported | `ReadableStream` / `WritableStream` / `TransformStream` は v1 対象外 |
 | `crypto.getRandomValues` | partial | host callback。canister backend は `raw_rand` seed から同期 bytes を派生。package smoke 対象 |
 | `crypto.subtle` | partial | SHA-256 digest、raw HMAC-SHA-256 sign / verify。canister `quickjs-ic` callback build 済み |

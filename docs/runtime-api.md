@@ -82,21 +82,23 @@ npm run build
 - `process.env` read-only 相当
 - `ic.caller()` / `ic.time()` / `ic.canisterId()` local placeholder
 
-`Request.text()`、`Request.json()`、`Request.arrayBuffer()`、`Response.text()`、`Response.json()`、`Response.arrayBuffer()` は Promise を返す。
+`Request.text()`、`Request.json()`、`Request.arrayBuffer()`、`Request.formData()`、`Response.text()`、`Response.json()`、`Response.arrayBuffer()`、`Response.formData()` は Promise を返す。body read 後は `bodyUsed` が true になり、再 read と `clone()` は `TypeError` を投げる。
 
-`Headers` は `append` / `set` / `delete` / `get` / `has` / `forEach` / `entries` / iterator を実装する。
+`Headers` は `append` / `set` / `delete` / `get` / `has` / `forEach` / `entries` / `keys` / `values` / `getSetCookie` / iterator を実装する。
 
-v0.2 host runtime は `Request` / `Response` / `Blob` body に `Uint8Array` と `ArrayBuffer` を受ける。`text()` は UTF-8 text に変換し、`arrayBuffer()` は byte sequence を維持する。
+v0.2 host runtime は `Request` / `Response` / `Blob` body に `Uint8Array` と `ArrayBuffer` を受ける。Rust-JS bridge は request / response / host fetch body を byte array JSON で渡すため、`arrayBuffer()` は non-UTF-8 byte sequence を維持する。`text()` は UTF-8 text 変換用 API。
 
 `AbortController` / `AbortSignal` は abort 済み `fetch()` を host fetch / HTTPS outcall 前に reject する。進行中 outcall の中断は未対応。
 
 Streams は v1 対象外。`ReadableStream` / `WritableStream` / `TransformStream` は提供しない。
 
-Cache API は `match` / `put` / `delete` と `caches.open` の subset。canister では stable memory KV に保存する。TTL、Cache-Control 評価、Range、conditional request は対象外。
+Cache API は `match` / `put` / `delete` と `caches.open` の subset。canister では stable memory KV に保存する。storage key は `cache:` prefix と JSON tuple `[cache_name,"GET",normalized_url]` で構造化し、cache 名 / URL 境界の衝突を避ける。`Cache-Control: max-age=N` は expiration として扱う。Range、conditional request は対象外。
 
-canister `quickjs-ic` backend は crypto callback を Rust 側に登録する。`getRandomValues` は `http_request_update` 開始時に取得した `raw_rand` seed を使う。
+canister `quickjs-ic` backend は crypto callback を Rust 側に登録する。`getRandomValues` は `http_request_update` 開始時に取得した `raw_rand` seed を使う。対象は integer TypedArray。`byteLength` 分を埋め、65,536 bytes 超過と TypedArray 以外は error。
 
-Rust-JS bridge DTO は number を number として扱う。response は `{ status: number, headers: [string, string][], body: number[]|string }`、fetch request は `{ id: number, method: string, url: string, headers: [string, string][], body: number[]|string }` を使う。JS 側では `number[]` を `Uint8Array` に戻す。
+canister `quickjs-ic` backend は `http_request_update` 開始時の IC time を `ic.time()` に注入する。host runtime は local placeholder を使う。
+
+Rust-JS bridge DTO は number を number として扱う。request dispatch body、response body、host fetch request body、host fetch response body は `number[]` を JSON 化した private wire shape で渡す。JS 側では `number[]` を `Uint8Array` に戻す。
 
 ## URL Handling
 

@@ -2,6 +2,10 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { TrieRouter } from 'hono/router/trie-router'
 
+declare global {
+  var ic: { time: () => bigint }
+}
+
 const app = new Hono({ router: new TrieRouter() })
 
 app.use('*', cors())
@@ -47,5 +51,16 @@ app.get('/cache-roundtrip', async () => {
   const response = await caches.default.match('https://ic-edge.local/cache-roundtrip-key')
   return new Response(response ? await response.text() : 'missing')
 })
+
+app.get('/cache-expired', async () => {
+  const key = 'https://ic-edge.local/cache-expired-key'
+  await caches.default.put(key, new Response('expired', {
+    headers: { 'cache-control': 'max-age=0' },
+  }))
+  const response = await caches.default.match(key)
+  return new Response(response ? await response.text() : 'missing')
+})
+
+app.get('/time', () => new Response(globalThis.ic.time().toString()))
 
 export default app

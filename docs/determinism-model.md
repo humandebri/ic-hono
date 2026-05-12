@@ -10,9 +10,11 @@ query 内で HTTPS outcall は行わない。JS が external `fetch()` を呼ぶ
 
 `http_request_update` は async endpoint。JS `fetch()` を queue 化し、Rust HTTPS outcall 完了後に Promise を resume する。
 
+request runtime snapshot は dispatch 開始時点で固定する。template は async `raw_rand().await` を先に完了し、その後に generation / bundle / env を stable store から読むため、完了済みの bundle / env 更新は次の request に反映される。
+
 ## Time
 
-`ic.time()` は runtime binding。host smoke では placeholder。canister では IC time に同期する設計が必要。
+`ic.time()` は runtime binding。host smoke では placeholder。canister `quickjs-ic` runtime では `http_request_update` 開始時の IC time を返す。
 
 ## Random
 
