@@ -8,6 +8,18 @@ const __ic_edge_validate_header_name = (name) => {
   if (!__ic_edge_header_token.test(value)) throw new TypeError('Invalid header name')
   return value.toLowerCase()
 }
+const __ic_edge_validate_header_value = (value) => {
+  const text = String(value)
+  if (/[\r\n\0]/.test(text)) throw new TypeError('Invalid header value')
+  return text
+}
+const __ic_edge_is_response = (value) => {
+  try {
+    return Boolean(value && typeof value === 'object' && value.__ic_edge_response === true)
+  } catch (_error) {
+    return false
+  }
+}
 
 class Headers {
   constructor(init = []) {
@@ -20,12 +32,12 @@ class Headers {
     for (const [name, value] of init) this.append(name, value)
   }
   append(name, value) {
-    this._values.push([__ic_edge_validate_header_name(name), String(value)])
+    this._values.push([__ic_edge_validate_header_name(name), __ic_edge_validate_header_value(value)])
   }
   set(name, value) {
     const key = __ic_edge_validate_header_name(name)
     this._values = this._values.filter(([item]) => item !== key)
-    this._values.push([key, String(value)])
+    this._values.push([key, __ic_edge_validate_header_value(value)])
   }
   delete(name) {
     const key = __ic_edge_validate_header_name(name)
@@ -90,7 +102,7 @@ class Request {
     return Promise.resolve(JSON.parse(body_text(consume_body(this))))
   }
   arrayBuffer() {
-    return Promise.resolve(body_bytes(consume_body(this)).buffer)
+    return Promise.resolve(body_array_buffer(consume_body(this)))
   }
   get body() {
     return this._body
@@ -116,17 +128,26 @@ class Request {
 
 class Response {
   constructor(body = '', init = {}) {
-    this.status = Object.prototype.hasOwnProperty.call(init, 'status') ? Number(init.status) : 200
+    if (init === null || init === undefined) init = {}
+    const isResponse = __ic_edge_is_response(body)
+    const hasStatus = Object.prototype.hasOwnProperty.call(init, 'status') && init.status !== undefined
+    const hasStatusText = Object.prototype.hasOwnProperty.call(init, 'statusText') && init.statusText !== undefined
+    this.status = isResponse
+      ? (hasStatus ? Number(init.status) : body.status)
+      : (hasStatus ? Number(init.status) : 200)
     if (!Number.isInteger(this.status) || this.status < 200 || this.status > 599) {
       throw new RangeError('Response status must be in the range 200 to 599')
     }
-    this.statusText = init.statusText || ''
-    this.headers = new Headers(init.headers || [])
-    this._body = body_from(body === null ? '' : body)
+    this.statusText = isResponse
+      ? (hasStatusText ? init.statusText : body.statusText)
+      : (init.statusText || '')
+    this.headers = new Headers(isResponse ? (init.headers || body.headers) : (init.headers || []))
+    this._body = body_from(body === null ? '' : (isResponse ? body.body : body))
+    this.__ic_edge_response = true
     this.bodyUsed = false
-    this.url = ''
-    this.redirected = false
-    this.type = 'default'
+    this.url = isResponse ? body.url : ''
+    this.redirected = isResponse ? body.redirected : false
+    this.type = isResponse ? body.type : 'default'
   }
   get ok() {
     return this.status >= 200 && this.status < 300
@@ -141,7 +162,7 @@ class Response {
     return Promise.resolve(JSON.parse(body_text(consume_body(this))))
   }
   arrayBuffer() {
-    return Promise.resolve(body_bytes(consume_body(this)).buffer)
+    return Promise.resolve(body_array_buffer(consume_body(this)))
   }
   formData() {
     const contentType = this.headers.get('content-type') || ''
@@ -181,7 +202,7 @@ class Blob {
     return Promise.resolve(body_text(this._body))
   }
   arrayBuffer() {
-    return Promise.resolve(body_bytes(this._body).buffer)
+    return Promise.resolve(body_array_buffer(this._body))
   }
 }
 
@@ -312,6 +333,11 @@ const body_from = (value = '') => {
 }
 const body_bytes = (value = '') => {
   return value instanceof Uint8Array ? value : new TextEncoder().encode(value)
+}
+
+const body_array_buffer = (value = '') => {
+  const bytes = body_bytes(value)
+  return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength)
 }
 
 const body_concat = (parts) => {

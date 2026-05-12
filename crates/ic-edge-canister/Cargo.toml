@@ -18,6 +18,7 @@ ic-cdk = "0.18"
 ic-edge-runtime = { version = "0.2.0", path = "../ic-edge-runtime" }
 ic-edge-web = { version = "0.2.0", path = "../ic-edge-web" }
 serde = { version = "1.0", features = ["derive"] }
+url = "2"
 
 [lib]
 path = "src/lib.rs"

@@ -25,7 +25,7 @@ API key を bundle に埋め込まない。OpenAI / Upstash examples は `proces
 
 Inbound HTTP は HTTPS outcall を使わない。IC Gateway から `http_request` / `http_request_update` に入り、JS `Request` へ変換する。
 
-Outbound は JS `fetch("https://...")` のみ HTTPS outcall に接続する。plain HTTP、localhost、private IP は対象外。
+Outbound は JS `fetch("https://...")` のみ HTTPS outcall に接続する。plain HTTP、URL credentials、空 host、localhost、private / loopback / link-local / multicast / unspecified IP、metadata host は runtime 境界で拒否する。DNS 解決による private IP 判定は canister 内非決定性を避けるため行わない。
 
 ## Runtime Surface
 
@@ -35,11 +35,13 @@ Outbound は JS `fetch("https://...")` のみ HTTPS outcall に接続する。pl
 
 ## Cache
 
-Worker Cache API subset は canister stable memory に保存する。global CDN cache ではない。`cache.put()` は GET key のみ許可し、`206`、`Vary: *`、`Set-Cookie` response を拒否する。
+Worker Cache API subset は canister stable memory に保存する。global CDN cache ではない。`cache.put()` は GET key のみ許可し、`206`、`Vary: *`、`Set-Cookie` response を拒否する。cache name、key、entry count、serialized index に固定上限を置く。
 
 ## Limits
 
 固定上限を超えた入力は拒否する。inbound body 超過は 413、controller API 超過は `Err(text)`、runtime / cache / fetch 超過は runtime error として扱う。
+
+Cache 追加上限: name 128 bytes、key 2 KiB、index 1024 entries、index JSON 128 KiB。
 
 ## Rollback
 

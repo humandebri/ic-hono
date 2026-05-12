@@ -32,7 +32,7 @@ mod web_url_polyfill;
 
 use ic_edge_web::{Request, Response, Result};
 #[cfg(not(target_arch = "wasm32"))]
-pub use quickjs::{HostFetch, QuickJsRuntime};
+pub use quickjs::{validate_bundle_contract, HostFetch, QuickJsRuntime};
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 pub use quickjs_wasm::QuickJsRuntime;
 use std::future::Future;

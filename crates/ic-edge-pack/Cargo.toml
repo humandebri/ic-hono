@@ -14,6 +14,7 @@ readme.workspace = true
 
 [dependencies]
 ic-edge-loader = { version = "0.2.0", path = "../ic-edge-loader" }
+ic-edge-runtime = { version = "0.2.0", path = "../ic-edge-runtime" }
 ic-edge-store = { version = "0.2.0", path = "../ic-edge-store" }
 ic-edge-web = { version = "0.2.0", path = "../ic-edge-web" }
 

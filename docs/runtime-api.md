@@ -42,7 +42,7 @@ esbuild src/app.ts \
   --outfile=dist/app.bundle.js
 ```
 
-CLI は出力 bundle に `__ic_edge_bundle` と `default` export が存在することを検査する。runtime は eval 後に次の値を app として扱う。
+CLI は出力 bundle を QuickJS runtime で eval し、`globalThis.__ic_edge_bundle.default.fetch` が function であることを検査する。runtime は eval 後に次の値を app として扱う。
 
 ```ts
 globalThis.__ic_edge_bundle.default
@@ -84,15 +84,15 @@ npm run build
 
 `Request.text()`、`Request.json()`、`Request.arrayBuffer()`、`Request.formData()`、`Response.text()`、`Response.json()`、`Response.arrayBuffer()`、`Response.formData()` は Promise を返す。body read 後は `bodyUsed` が true になり、再 read と `clone()` は `TypeError` を投げる。
 
-`Headers` は `append` / `set` / `delete` / `get` / `has` / `forEach` / `entries` / `keys` / `values` / `getSetCookie` / iterator を実装する。
+`Headers` は `append` / `set` / `delete` / `get` / `has` / `forEach` / `entries` / `keys` / `values` / `getSetCookie` / iterator を実装する。name は HTTP token、value は CR / LF / NUL なしを検証する。`Set-Cookie` は `getSetCookie()` で個別値を返す。
 
-v0.2 host runtime は `Request` / `Response` / `Blob` body に `Uint8Array` と `ArrayBuffer` を受ける。Rust-JS bridge は request / response / host fetch body を byte array JSON で渡すため、`arrayBuffer()` は non-UTF-8 byte sequence を維持する。`text()` は UTF-8 text 変換用 API。
+v0.2 host runtime は `Request` / `Response` / `Blob` body に `Uint8Array`、typed array view、`ArrayBuffer` を受ける。`arrayBuffer()` は typed array view の実範囲だけを返す。Rust-JS bridge は request / response / host fetch body を byte array JSON で渡すため、non-UTF-8 byte sequence を維持する。`text()` は UTF-8 text 変換用 API。
 
 `AbortController` / `AbortSignal` は abort 済み `fetch()` を host fetch / HTTPS outcall 前に reject する。進行中 outcall の中断は未対応。
 
 Streams は v1 対象外。`ReadableStream` / `WritableStream` / `TransformStream` は提供しない。
 
-Cache API は `match` / `put` / `delete` と `caches.open` の subset。canister では stable memory KV に保存する。storage key は `cache:` prefix と JSON tuple `[cache_name,"GET",normalized_url]` で構造化し、cache 名 / URL 境界の衝突を避ける。`Cache-Control: max-age=N` は expiration として扱う。Range、conditional request は対象外。
+Cache API は `match` / `put` / `delete` と `caches.open` の subset。canister では stable memory KV に保存する。storage key は `cache:` prefix と JSON tuple `[cache_name,"GET",normalized_url]` で構造化し、cache 名 / URL 境界の衝突を避ける。`Cache-Control: max-age=N` は expiration として扱う。`cache.put()` は `Set-Cookie` response を拒否する。Range、conditional request は対象外。
 
 canister `quickjs-ic` backend は crypto callback を Rust 側に登録する。`getRandomValues` は `http_request_update` 開始時に取得した `raw_rand` seed を使う。対象は integer TypedArray。`byteLength` 分を埋め、65,536 bytes 超過と TypedArray 以外は error。
 
@@ -175,6 +175,8 @@ pub trait HostFetch {
 制約:
 
 - URL は `https://` のみ。
+- URL credentials、空 host、localhost、private / loopback / link-local / multicast / unspecified IP、metadata host は拒否。
+- DNS 解決による private IP 判定は canister 内非決定性を避けるため行わない。
 - method は `GET` / `POST` / `HEAD` のみ。
 - `max_response_bytes` は既定 64 KiB。
 - transform は consensus 用に response header を削除する。

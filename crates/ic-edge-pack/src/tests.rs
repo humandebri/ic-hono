@@ -14,7 +14,7 @@ fn pack_runs_esbuild_and_checks_contract() {
     let esbuild = bin.join("esbuild");
     fs::write(
         &esbuild,
-        "#!/usr/bin/env sh\nfor arg in \"$@\"; do case \"$arg\" in --outfile=*) out=\"${arg#--outfile=}\";; esac; done\nmkdir -p \"$(dirname \"$out\")\"\nprintf 'var __ic_edge_bundle = (() => ({ default: {} }))();' > \"$out\"\n",
+        "#!/usr/bin/env sh\nfor arg in \"$@\"; do case \"$arg\" in --outfile=*) out=\"${arg#--outfile=}\";; esac; done\nmkdir -p \"$(dirname \"$out\")\"\nprintf 'var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response(\"ok\") } }))();' > \"$out\"\n",
     )
     .unwrap();
     #[cfg(unix)]
@@ -35,6 +35,33 @@ fn pack_runs_esbuild_and_checks_contract() {
     ])
     .unwrap();
     assert_eq!(output, format!("packed {out_file}"));
+}
+
+#[test]
+fn validates_runtime_bundle_contract_shape() {
+    let root = env::temp_dir().join(format!("ic-edge-contract-test-{}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    let valid = root.join("valid.js");
+    let comment_only = root.join("comment-only.js");
+    let missing_fetch = root.join("missing-fetch.js");
+    fs::write(
+        &valid,
+        "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();",
+    )
+    .unwrap();
+    fs::write(
+        &comment_only,
+        "var text = '__ic_edge_bundle default:'; // default: __ic_edge_bundle",
+    )
+    .unwrap();
+    fs::write(
+        &missing_fetch,
+        "var __ic_edge_bundle = (() => ({ default: {} }))();",
+    )
+    .unwrap();
+    assert!(validate_bundle_contract(&valid.to_string_lossy()).is_ok());
+    assert!(validate_bundle_contract(&comment_only.to_string_lossy()).is_err());
+    assert!(validate_bundle_contract(&missing_fetch.to_string_lossy()).is_err());
 }
 
 #[test]

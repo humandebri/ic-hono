@@ -45,9 +45,24 @@ fn runtime_history_keeps_recent_snapshots_and_rolls_back_bundle_env() {
     let history = history_support::runtime_history(&store);
     assert_eq!(history.len(), 5);
     assert_eq!(history[0].generation, 2);
+    assert_eq!(history[4].generation, 6);
 
     history_support::rollback(&mut store, 3).unwrap();
     assert_eq!(store.get_module("app").unwrap(), b"bundle-3");
     assert_eq!(store.get_kv("env:ACTIVE").unwrap(), Some(b"env-3".to_vec()));
     assert_eq!(read_generation(&store), 1);
+}
+
+#[test]
+fn runtime_history_updates_duplicate_generation_without_duplicate_entry() {
+    let mut store = StableEdgeStore::new();
+    store.put_module("app", b"old").unwrap();
+    history_support::record_snapshot(&mut store, 1).unwrap();
+    store.put_module("app", b"new").unwrap();
+    history_support::record_snapshot(&mut store, 1).unwrap();
+
+    let history = history_support::runtime_history(&store);
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].generation, 1);
+    assert_eq!(history[0].bundle_bytes, 3);
 }

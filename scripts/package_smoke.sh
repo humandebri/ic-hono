@@ -14,10 +14,6 @@ test -f "$init_tmp/src/app.ts" || {
 
 pack_tmp="/tmp/ic-edge-pack-basic.js"
 cargo run -q -p ic-edge-pack --bin ic-edge -- pack examples/hono-basic/src/app.ts --out "$pack_tmp" >/dev/null
-grep -q '__ic_edge_bundle' "$pack_tmp" || {
-  echo "smoke failed: ic-edge pack did not emit bundle contract" >&2
-  exit 1
-}
 
 for entry in \
   examples/hono-basic/src/app.ts \
@@ -30,10 +26,6 @@ do
   example_dir="$(dirname "$(dirname "$entry")")"
   out="$example_dir/dist/app.bundle.js"
   cargo run -q -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
-  grep -q '__ic_edge_bundle' "$out" || {
-    echo "smoke failed: ic-edge pack contract missing for $entry" >&2
-    exit 1
-  }
 done
 
 expect() {

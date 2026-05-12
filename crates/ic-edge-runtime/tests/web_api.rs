@@ -116,6 +116,35 @@ fn binary_body_roundtrips_through_array_buffer_and_clone() {
 }
 
 #[test]
+fn array_buffer_uses_exact_typed_array_range() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                const source = new Uint8Array([9, 1, 2, 3, 9])
+                const request = new Request('https://edge.test/a', {
+                  method: 'POST',
+                  body: source.subarray(1, 4)
+                })
+                const response = new Response(source.subarray(2, 4))
+                const blob = new Blob([source.buffer, source.subarray(1, 3)])
+                return Response.json({
+                  requestBytes: Array.from(new Uint8Array(await request.arrayBuffer())),
+                  responseBytes: Array.from(new Uint8Array(await response.arrayBuffer())),
+                  blobBytes: Array.from(new Uint8Array(await blob.arrayBuffer()))
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"requestBytes":[1,2,3],"responseBytes":[2,3],"blobBytes":[9,1,2,3,9,1,2]}"#
+    );
+}
+
+#[test]
 fn request_constructor_copies_request_and_allows_init_overrides() {
     let mut runtime = QuickJsRuntime::new().unwrap();
     runtime
@@ -146,6 +175,42 @@ fn request_constructor_copies_request_and_allows_init_overrides() {
     assert_eq!(
         response.body.text().unwrap(),
         r#"{"url":"https://edge.test/a","method":"PUT","one":null,"two":"2","body":"override"}"#
+    );
+}
+
+#[test]
+fn response_constructor_copies_response_and_allows_init_overrides() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                const original = new Response(new Uint8Array([1, 2, 3]), {
+                  status: 201,
+                  statusText: 'Created',
+                  headers: { 'x-one': '1' }
+                })
+                const copied = new Response(original, {
+                  status: 202,
+                  headers: { 'x-two': '2' }
+                })
+                await original.arrayBuffer()
+                const copiedAfterRead = new Response(original)
+                return Response.json({
+                  status: copied.status,
+                  statusText: copied.statusText,
+                  one: copied.headers.get('x-one'),
+                  two: copied.headers.get('x-two'),
+                  body: Array.from(new Uint8Array(await copied.arrayBuffer())),
+                  bodyAfterRead: Array.from(new Uint8Array(await copiedAfterRead.arrayBuffer()))
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"status":202,"statusText":"Created","one":null,"two":"2","body":[1,2,3],"bodyAfterRead":[1,2,3]}"#
     );
 }
 
@@ -354,6 +419,40 @@ fn cache_api_rejects_unsupported_put_inputs() {
     assert_eq!(
         response.body.text().unwrap(),
         r#"{"rejected":true,"message":"cache.put only supports GET requests"}"#
+    );
+}
+
+#[test]
+fn cache_api_rejects_oversized_names_and_keys() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                let nameError = ''
+                try {
+                  const cache = await caches.open('n'.repeat(129))
+                  await cache.put('https://cache.test/a', new Response('A'))
+                } catch (error) {
+                  nameError = error.message
+                }
+                let keyError = ''
+                try {
+                  await caches.default.put(`https://cache.test/${'k'.repeat(2049)}`, new Response('A'))
+                } catch (error) {
+                  keyError = error.message
+                }
+                return Response.json({
+                  nameRejected: nameError.includes('cache name exceeds v1 limit'),
+                  keyRejected: keyError.includes('cache key exceeds v1 limit')
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"nameRejected":true,"keyRejected":true}"#
     );
 }
 
@@ -579,13 +678,20 @@ fn response_headers_blob_and_text_decoder_follow_web_contracts() {
                 } catch (error) {
                   invalidHeaderError = error.name
                 }
+                let invalidHeaderValueError = ''
+                try {
+                  new Headers().append('x-edge', 'bad\\r\\nvalue')
+                } catch (error) {
+                  invalidHeaderValueError = error.name
+                }
                 return Response.json({
                   contentType: customJson.headers.get('content-type'),
                   blobBytes: Array.from(new Uint8Array(await blob.arrayBuffer())),
                   replacement: new TextDecoder().decode(new Uint8Array([255])),
                   decodedBuffer: new TextDecoder().decode(new TextEncoder().encode('ok').buffer),
                   invalidStatusError,
-                  invalidHeaderError
+                  invalidHeaderError,
+                  invalidHeaderValueError
                 })
             } }",
         )
@@ -593,6 +699,6 @@ fn response_headers_blob_and_text_decoder_follow_web_contracts() {
     let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
     assert_eq!(
         response.body.text().unwrap(),
-        r#"{"contentType":"application/problem+json","blobBytes":[255,0,128],"replacement":"�","decodedBuffer":"ok","invalidStatusError":"RangeError","invalidHeaderError":"TypeError"}"#
+        r#"{"contentType":"application/problem+json","blobBytes":[255,0,128],"replacement":"�","decodedBuffer":"ok","invalidStatusError":"RangeError","invalidHeaderError":"TypeError","invalidHeaderValueError":"TypeError"}"#
     );
 }

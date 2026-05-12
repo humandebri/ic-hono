@@ -11,6 +11,8 @@ use ic_cdk::management_canister::{
 use ic_edge_runtime::{AsyncEdgeRuntime, EdgeRuntime};
 use ic_edge_web::{limits, Body, Error, Headers, Request, Response, Result};
 use serde::Deserialize;
+use std::net::{Ipv4Addr, Ipv6Addr};
+use url::{Host, Url};
 
 #[cfg(test)]
 mod tests;
@@ -140,11 +142,7 @@ pub fn build_https_outcall_args(
     transform_name: &str,
     max_response_bytes: Option<u64>,
 ) -> Result<HttpRequestArgs> {
-    if !request.url.starts_with("https://") {
-        return Err(Error::Runtime(
-            "HTTPS outcalls require an https:// URL".to_string(),
-        ));
-    }
+    let url = validate_outcall_url(&request.url)?;
     let response_limit = max_response_bytes.unwrap_or(limits::DEFAULT_FETCH_RESPONSE_BYTES);
     if response_limit > limits::MAX_FETCH_RESPONSE_BYTES {
         return Err(Error::Runtime(format!(
@@ -153,7 +151,7 @@ pub fn build_https_outcall_args(
         )));
     }
     Ok(HttpRequestArgs {
-        url: request.url,
+        url,
         max_response_bytes: Some(response_limit),
         method: to_http_method(&request.method)?,
         headers: request
@@ -167,6 +165,85 @@ pub fn build_https_outcall_args(
         body: body_for_method(&request.method, request.body),
         transform: transform_context(transform_name),
     })
+}
+
+fn validate_outcall_url(raw_url: &str) -> Result<String> {
+    let url = Url::parse(raw_url)
+        .map_err(|error| Error::Runtime(format!("invalid HTTPS outcall URL: {error}")))?;
+    if url.scheme() != "https" {
+        return Err(Error::Runtime(
+            "HTTPS outcalls require an https:// URL".to_string(),
+        ));
+    }
+    let authority = raw_url
+        .split_once("://")
+        .map(|(_, rest)| rest.split(['/', '?', '#']).next().unwrap_or_default())
+        .unwrap_or_default();
+    if authority.is_empty() {
+        return Err(Error::Runtime("HTTPS outcalls require a host".to_string()));
+    }
+    if !url.username().is_empty() || url.password().is_some() {
+        return Err(Error::Runtime(
+            "HTTPS outcalls do not allow URL credentials".to_string(),
+        ));
+    }
+    let host = url
+        .host()
+        .ok_or_else(|| Error::Runtime("HTTPS outcalls require a host".to_string()))?;
+    match host {
+        Host::Domain(domain) => validate_outcall_domain(domain)?,
+        Host::Ipv4(address) => validate_outcall_ipv4(address)?,
+        Host::Ipv6(address) => validate_outcall_ipv6(address)?,
+    }
+    Ok(url.to_string())
+}
+
+fn validate_outcall_domain(domain: &str) -> Result<()> {
+    let normalized = domain.trim_end_matches('.').to_ascii_lowercase();
+    if normalized.is_empty() {
+        return Err(Error::Runtime("HTTPS outcalls require a host".to_string()));
+    }
+    if normalized == "localhost"
+        || normalized == "metadata"
+        || normalized == "metadata.google.internal"
+    {
+        return Err(Error::Runtime(
+            "HTTPS outcalls require a public host".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_outcall_ipv4(address: Ipv4Addr) -> Result<()> {
+    if address.is_loopback()
+        || address.is_private()
+        || address.is_link_local()
+        || address.is_unspecified()
+        || address.is_multicast()
+    {
+        return Err(Error::Runtime(
+            "HTTPS outcalls require a public IPv4 host".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_outcall_ipv6(address: Ipv6Addr) -> Result<()> {
+    if address.is_loopback()
+        || address.is_unspecified()
+        || address.is_multicast()
+        || address.is_unicast_link_local()
+        || is_unique_local_ipv6(address)
+    {
+        return Err(Error::Runtime(
+            "HTTPS outcalls require a public IPv6 host".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn is_unique_local_ipv6(address: Ipv6Addr) -> bool {
+    (address.segments()[0] & 0xfe00) == 0xfc00
 }
 
 /// Transform function that strips all HTTPS outcall response headers.

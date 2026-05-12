@@ -22,7 +22,7 @@ pub(super) fn insert_env_name(names: &str, name: &str) -> String {
         .filter(|entry| valid_env_name(entry))
         .map(str::to_string)
         .collect::<Vec<_>>();
-    if !names.iter().any(|entry| entry == name) {
+    if valid_env_name(name) && !names.iter().any(|entry| entry == name) {
         names.push(name.to_string());
     }
     names.sort();
@@ -60,6 +60,7 @@ mod tests {
     fn env_index_is_sorted_unique_and_filtered() {
         assert_eq!(insert_env_name("B\nbad-name\nA\n", "C"), "A\nB\nC");
         assert_eq!(insert_env_name("A\nB", "A"), "A\nB".to_string());
+        assert_eq!(insert_env_name("A\nB", "bad-name"), "A\nB".to_string());
     }
 
     #[test]

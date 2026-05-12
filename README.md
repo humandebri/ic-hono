@@ -102,9 +102,9 @@ Host smoke is green for Hono basic routes, JSON echo, params/query, CORS, zod, C
 
 Canister backend is quickjs-ic only: `wasm32-wasip1` build, WASI import stubbing, then `wasi2ic`. Local canister smoke covers direct update, Gateway, HTTPS outcall, stable Cache, runtime generation cache, and rollback.
 
-Cache API is canister-local stable storage, not a CDN cache. It supports `caches.default`, `caches.open`, `match`, `put`, `delete`, and `Cache-Control: max-age=N` expiration; Range and conditional request behavior are out of scope for v1 preview.
+Cache API is canister-local stable storage, not a CDN cache. It supports `caches.default`, `caches.open`, `match`, `put`, `delete`, and `Cache-Control: max-age=N` expiration; `Set-Cookie` responses, Range, and conditional request behavior are out of scope for v1 preview.
 
-Runtime limits are fixed: bundle 2 MiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
+Runtime limits are fixed: bundle 2 MiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, cache name 128 bytes, cache key 2 KiB, cache index 1024 entries / 128 KiB JSON, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
 
 ## Release Gates
 

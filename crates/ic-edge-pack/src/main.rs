@@ -2,6 +2,7 @@
 //! It runs a local bundler and checks the runtime bundle contract.
 
 use ic_edge_pack::{default_out_file, manifest_for_request, upload_bundle, PackRequest};
+use ic_edge_runtime::validate_bundle_contract as validate_runtime_bundle_contract;
 use ic_edge_store::{EdgeStore, MemoryEdgeStore};
 use ic_edge_web::limits;
 use std::env;
@@ -223,13 +224,7 @@ fn find_esbuild(entrypoint: &Path) -> PathBuf {
 
 fn validate_bundle_contract(bundle_path: &str) -> Result<(), String> {
     let source = fs::read_to_string(bundle_path).map_err(|error| error.to_string())?;
-    if !source.contains("__ic_edge_bundle") {
-        return Err("bundle contract missing __ic_edge_bundle global".to_string());
-    }
-    if !source.contains("default:") {
-        return Err("bundle contract missing default export".to_string());
-    }
-    Ok(())
+    validate_runtime_bundle_contract(&source).map_err(|error| format!("{error:?}"))
 }
 
 fn parse_out_file(args: &[String]) -> Result<Option<PathBuf>, String> {

@@ -31,7 +31,26 @@ jobs:
           npm install --prefix examples/hono-openai
           npm install --prefix examples/hono-upstash
           npm install --prefix examples/hono-jose
-      - name: Local CI
-        run: scripts/ci_local.sh
+      - name: Rust format
+        run: cargo fmt --all --check
+      - name: Rust tests
+        run: cargo test
+      - name: API contract
+        run: scripts/check_api_contract.sh
       - name: Compatibility matrix
         run: scripts/check_compatibility_matrix.sh
+      - name: Canister interface
+        run: scripts/check_canister_interface.sh
+      - name: Release audit
+        run: scripts/check_release_audit.sh
+      - name: Package smoke
+        run: scripts/package_smoke.sh
+      - name: Canister wasm build
+        run: cargo build --target wasm32-wasip1 -p ic-edge-canister-template --release --features quickjs-ic
+      - name: Runtime import check
+        run: |
+          scripts/build_canister_backend_wasm.sh /tmp/ic_edge_runtime_import_check.wasm
+          if wasm-objdump -x /tmp/ic_edge_runtime_import_check.wasm | grep -q '<.*> <- \(env\|wasi_snapshot_preview1\)\.'; then
+            echo "unexpected env.* or wasi_snapshot_preview1.* import after backend build" >&2
+            exit 1
+          fi

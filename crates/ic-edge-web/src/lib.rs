@@ -24,6 +24,14 @@ pub mod limits {
     pub const MAX_CACHE_ENTRY_BYTES: usize = 256 * 1024;
     /// Maximum total Cache API storage tracked by the template.
     pub const MAX_CACHE_TOTAL_BYTES: usize = 4 * 1024 * 1024;
+    /// Maximum Cache API namespace length.
+    pub const MAX_CACHE_NAME_BYTES: usize = 128;
+    /// Maximum normalized Cache API key length.
+    pub const MAX_CACHE_KEY_BYTES: usize = 2 * 1024;
+    /// Maximum number of Cache API index entries.
+    pub const MAX_CACHE_INDEX_ENTRIES: usize = 1024;
+    /// Maximum serialized Cache API index size.
+    pub const MAX_CACHE_INDEX_BYTES: usize = 128 * 1024;
     /// Number of runtime snapshots retained for rollback.
     pub const MAX_RUNTIME_HISTORY: usize = 5;
     /// Maximum number of environment variable names.
@@ -37,6 +45,8 @@ pub mod limits {
 pub enum Error {
     /// Header name is empty or contains a byte outside the HTTP token set.
     InvalidHeaderName,
+    /// Header value contains bytes that can break HTTP header framing.
+    InvalidHeaderValue,
     /// HTTP status is outside `100..=599`.
     InvalidStatus,
     /// Body bytes could not be decoded as UTF-8 text.
@@ -71,6 +81,7 @@ impl Headers {
     /// Appends a value without removing existing values for the same name.
     pub fn append(&mut self, name: &str, value: String) -> Result<()> {
         let normalized = normalize_header_name(name)?;
+        validate_header_value(&value)?;
         self.values.entry(normalized).or_default().push(value);
         Ok(())
     }
@@ -78,6 +89,7 @@ impl Headers {
     /// Replaces all existing values for `name`.
     pub fn set(&mut self, name: &str, value: String) -> Result<()> {
         let normalized = normalize_header_name(name)?;
+        validate_header_value(&value)?;
         self.values.insert(normalized, vec![value]);
         Ok(())
     }
@@ -200,6 +212,13 @@ fn normalize_header_name(name: &str) -> Result<String> {
     Ok(name.to_ascii_lowercase())
 }
 
+fn validate_header_value(value: &str) -> Result<()> {
+    if value.bytes().any(|byte| matches!(byte, b'\r' | b'\n' | 0)) {
+        return Err(Error::InvalidHeaderValue);
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -211,12 +230,84 @@ mod tests {
             .set("Content-Type", "text/plain".to_string())
             .unwrap();
         assert_eq!(headers.get("content-type"), Some("text/plain".to_string()));
+        assert_eq!(headers.get("CONTENT-TYPE"), Some("text/plain".to_string()));
+    }
+
+    #[test]
+    fn headers_reject_invalid_names() {
+        let mut headers = Headers::new();
+        assert_eq!(
+            headers.set("", "value".to_string()).unwrap_err(),
+            Error::InvalidHeaderName
+        );
+        assert_eq!(
+            headers.set("bad header", "value".to_string()).unwrap_err(),
+            Error::InvalidHeaderName
+        );
+        assert_eq!(
+            headers.set("x:y", "value".to_string()).unwrap_err(),
+            Error::InvalidHeaderName
+        );
+    }
+
+    #[test]
+    fn headers_reject_invalid_values() {
+        let mut headers = Headers::new();
+        assert_eq!(
+            headers.set("x-edge", "bad\rvalue".to_string()).unwrap_err(),
+            Error::InvalidHeaderValue
+        );
+        assert_eq!(
+            headers.set("x-edge", "bad\nvalue".to_string()).unwrap_err(),
+            Error::InvalidHeaderValue
+        );
+        assert_eq!(
+            headers.set("x-edge", "bad\0value".to_string()).unwrap_err(),
+            Error::InvalidHeaderValue
+        );
+        assert_eq!(
+            Headers::from_pairs(vec![("x-edge".to_string(), "bad\rvalue".to_string())])
+                .unwrap_err(),
+            Error::InvalidHeaderValue
+        );
+    }
+
+    #[test]
+    fn append_preserves_value_order() {
+        let mut headers = Headers::new();
+        headers.append("accept", "text/plain".to_string()).unwrap();
+        headers
+            .append("Accept", "application/json".to_string())
+            .unwrap();
+        assert_eq!(
+            headers.get("ACCEPT"),
+            Some("text/plain, application/json".to_string())
+        );
+    }
+
+    #[test]
+    fn set_replaces_existing_values() {
+        let mut headers = Headers::new();
+        headers
+            .append("cache-control", "max-age=60".to_string())
+            .unwrap();
+        headers
+            .append("Cache-Control", "private".to_string())
+            .unwrap();
+        headers
+            .set("CACHE-CONTROL", "no-store".to_string())
+            .unwrap();
+        assert_eq!(headers.get("cache-control"), Some("no-store".to_string()));
     }
 
     #[test]
     fn response_rejects_invalid_status() {
         let err = Response::new(99, Headers::new(), Body::empty()).unwrap_err();
         assert_eq!(err, Error::InvalidStatus);
+        let err = Response::new(600, Headers::new(), Body::empty()).unwrap_err();
+        assert_eq!(err, Error::InvalidStatus);
+        assert!(Response::new(100, Headers::new(), Body::empty()).is_ok());
+        assert!(Response::new(599, Headers::new(), Body::empty()).is_ok());
     }
 
     #[test]

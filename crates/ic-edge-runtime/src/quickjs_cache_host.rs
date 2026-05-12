@@ -68,6 +68,11 @@ impl CacheHost for MemoryCacheHost {
             return Err(Error::Runtime("cache entry exceeds v1 limit".to_string()));
         }
         let storage_key = cache_key(cache_name, key)?;
+        if !self.entries.contains_key(&storage_key)
+            && self.entries.len() >= limits::MAX_CACHE_INDEX_ENTRIES
+        {
+            return Err(Error::Runtime("cache index exceeds v1 limit".to_string()));
+        }
         let old_size = self
             .entries
             .get(&storage_key)
@@ -88,9 +93,20 @@ impl CacheHost for MemoryCacheHost {
 }
 
 fn cache_key(cache_name: &str, key: &str) -> Result<String> {
+    validate_cache_key_parts(cache_name, key)?;
     let encoded = serde_json::to_string(&(cache_name, "GET", key))
         .map_err(|error| Error::Runtime(error.to_string()))?;
     Ok(format!("cache:{encoded}"))
+}
+
+fn validate_cache_key_parts(cache_name: &str, key: &str) -> Result<()> {
+    if cache_name.len() > limits::MAX_CACHE_NAME_BYTES {
+        return Err(Error::Runtime("cache name exceeds v1 limit".to_string()));
+    }
+    if key.len() > limits::MAX_CACHE_KEY_BYTES {
+        return Err(Error::Runtime("cache key exceeds v1 limit".to_string()));
+    }
+    Ok(())
 }
 
 fn to_js_error(error: Error) -> rquickjs::Error {

@@ -25,6 +25,30 @@ pub struct QuickJsRuntime {
     cache_host: Rc<RefCell<Box<dyn CacheHost>>>,
 }
 
+/// Evaluates a bundle and verifies the v1 IIFE app contract.
+pub fn validate_bundle_contract(source: &str) -> Result<()> {
+    let mut runtime = QuickJsRuntime::new()?;
+    runtime.install_contract_env()?;
+    runtime.eval_module("contract", source)?;
+    let valid = runtime
+        .context
+        .with(|ctx| {
+            ctx.eval::<bool, _>(
+                "typeof globalThis.__ic_edge_bundle === 'object' &&
+                 typeof globalThis.__ic_edge_bundle.default === 'object' &&
+                 typeof globalThis.__ic_edge_bundle.default.fetch === 'function'",
+            )
+        })
+        .map_err(to_runtime_error)?;
+    if valid {
+        Ok(())
+    } else {
+        Err(Error::Runtime(
+            "bundle contract requires __ic_edge_bundle.default.fetch function".to_string(),
+        ))
+    }
+}
+
 impl QuickJsRuntime {
     /// Creates a runtime with Web API, Cache, crypto, and dispatch polyfills installed.
     pub fn new() -> Result<Self> {
@@ -83,6 +107,26 @@ impl QuickJsRuntime {
                 ctx.eval::<(), _>(web_url_polyfill::SOURCE)?;
                 ctx.eval::<(), _>(web_cache_polyfill::SOURCE)?;
                 ctx.eval::<(), _>(web_dispatch_polyfill::SOURCE)
+            })
+            .map_err(to_runtime_error)
+    }
+
+    fn install_contract_env(&self) -> Result<()> {
+        self.context
+            .with(|ctx| {
+                ctx.eval::<(), _>(
+                    "globalThis.process ||= {};
+                     globalThis.process.env = new Proxy(globalThis.process.env || {}, {
+                       get(target, prop) {
+                         if (prop in target) return target[prop]
+                         if (typeof prop !== 'string') return undefined
+                         if (prop.endsWith('_URL')) return 'https://example.test'
+                         if (prop.endsWith('_MODEL')) return 'test-model'
+                         if (prop.endsWith('_API_KEY')) return 'sk-ic-edge-contract-smoke'
+                         return 'ic-edge-contract-smoke'
+                       }
+                     })",
+                )
             })
             .map_err(to_runtime_error)
     }

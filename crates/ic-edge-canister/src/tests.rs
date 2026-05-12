@@ -41,6 +41,22 @@ fn rejects_inbound_body_above_v1_limit_with_413() {
 }
 
 #[test]
+fn accepts_inbound_body_at_v1_limit() {
+    let mut runtime = StaticRuntime::new();
+    let response = handle_http(
+        &mut runtime,
+        IcHttpRequest {
+            method: "POST".to_string(),
+            url: "/".to_string(),
+            headers: Vec::new(),
+            body: vec![0; ic_edge_web::limits::MAX_INBOUND_BODY_BYTES],
+        },
+    )
+    .unwrap();
+    assert_eq!(response.status_code, 200);
+}
+
+#[test]
 fn maps_cdk_http_to_runtime_response() {
     let mut runtime = StaticRuntime::new();
     let response = handle_cdk_http(
@@ -69,6 +85,32 @@ fn rejects_non_https_outcall_url() {
     );
     let result = build_https_outcall_args(request, "transform_strip_headers", Some(1024));
     assert!(matches!(result, Err(Error::Runtime(_))));
+}
+
+#[test]
+fn rejects_non_public_outcall_hosts() {
+    for url in [
+        "https://localhost/api",
+        "https://127.0.0.1/api",
+        "https://10.0.0.1/api",
+        "https://192.168.0.1/api",
+        "https://169.254.169.254/latest/meta-data",
+        "https://[::1]/api",
+        "https://[fe80::1]/api",
+        "https://[fc00::1]/api",
+        "https://user:pass@example.com/api",
+        "https://",
+        "https://metadata.google.internal/computeMetadata/v1",
+    ] {
+        let request = Request::new(
+            "GET".to_string(),
+            url.to_string(),
+            Headers::new(),
+            Body::empty(),
+        );
+        let result = build_https_outcall_args(request, "transform_strip_headers", Some(1024));
+        assert!(matches!(result, Err(Error::Runtime(_))), "{url}");
+    }
 }
 
 #[test]
@@ -104,6 +146,19 @@ fn builds_post_outcall_with_body_and_explicit_limit() {
     assert_eq!(args.max_response_bytes, Some(4096));
     assert!(matches!(args.method, HttpMethod::POST));
     assert_eq!(args.body, Some(br#"{"ok":true}"#.to_vec()));
+}
+
+#[test]
+fn builds_head_outcall_without_body() {
+    let request = Request::new(
+        "HEAD".to_string(),
+        "https://example.com/api".to_string(),
+        Headers::new(),
+        Body::from_bytes(b"ignored".to_vec()),
+    );
+    let args = build_https_outcall_args(request, "transform_strip_headers", Some(4096)).unwrap();
+    assert!(matches!(args.method, HttpMethod::HEAD));
+    assert_eq!(args.body, None);
 }
 
 #[test]

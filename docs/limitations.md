@@ -19,12 +19,12 @@ v1 preview Worker互換 Core+Cache runtime の制約。crate semver は `0.2.0`�
 
 ## Web API
 
-- `Headers` / `Request` / `Response` は Worker Core subset 実装。body read は single-use で、`clone()` は read 前のみ対応。
+- `Headers` / `Request` / `Response` は Worker Core subset 実装。header value は CR / LF / NUL を拒否する。body read は single-use で、`clone()` は read 前のみ対応。
 - `URL` は最小実装。`URLSearchParams` は実用 subset。
-- `Blob` / `FormData` は最小実装。`Request.formData()` は `application/x-www-form-urlencoded` のみ対応。`FormData` multipart parse は未実装。
+- `Blob` / `FormData` は最小実装。`Blob` は string / binary parts を byte-preserving に連結する。`Request.formData()` は `application/x-www-form-urlencoded` のみ対応。`FormData` multipart parse は未実装。
 - `AbortSignal` は abort 済み `fetch()` の事前 reject のみ対応。進行中 HTTPS outcall の cancel は未実装。
 - Streams は未実装。
-- Cache API は `caches.default` / `caches.open` / `match` / `put` / `delete` の subset。canister stable memory に保存する。`Cache-Control: max-age=N` は expiration として評価する。Range、conditional request は未実装。
+- Cache API は `caches.default` / `caches.open` / `match` / `put` / `delete` の subset。canister stable memory に保存する。`Cache-Control: max-age=N` は expiration として評価する。`Set-Cookie` response、Range、conditional request は未対応。
 - `crypto.getRandomValues` は最小実装。canister では request 開始時の `raw_rand` seed から同期 API 用 bytes を派生する。
 - `crypto.subtle.digest` は SHA-256 のみ実装。
 - `crypto.subtle.importKey/sign/verify` は raw HMAC-SHA-256 のみ実装。
@@ -54,6 +54,10 @@ v1 preview Worker互換 Core+Cache runtime の制約。crate semver は `0.2.0`�
 - fetch count per request: 16
 - cache entry: 256 KiB
 - cache total: 4 MiB
+- cache name: 128 bytes
+- cache key: 2 KiB
+- cache index entries: 1024
+- cache index JSON: 128 KiB
 - runtime history: 5 generations
 - env names: 64
 - env value: 16 KiB
