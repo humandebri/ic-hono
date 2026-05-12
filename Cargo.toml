@@ -1,0 +1,19 @@
+[workspace]
+members = [
+    "crates/ic-edge-web",
+    "crates/ic-edge-runtime",
+    "crates/ic-edge-store",
+    "crates/ic-edge-canister",
+    "crates/ic-edge-loader",
+    "crates/ic-edge-pack",
+    "examples/canister-template",
+]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/humandebri/ic-hono"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"

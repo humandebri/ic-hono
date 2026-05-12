@@ -1,0 +1,21 @@
+[package]
+name = "ic-edge-canister-template"
+version = "0.2.0"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib"]
+path = "src/lib.rs"
+
+[features]
+quickjs-ic = ["ic-edge-runtime/quickjs-ic"]
+
+[dependencies]
+candid = "0.10"
+ic-cdk = "0.18"
+ic-edge-canister = { path = "../../crates/ic-edge-canister" }
+ic-edge-runtime = { path = "../../crates/ic-edge-runtime" }
+ic-edge-store = { path = "../../crates/ic-edge-store" }
+ic-edge-web = { path = "../../crates/ic-edge-web" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

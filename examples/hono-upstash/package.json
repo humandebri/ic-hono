@@ -1,0 +1,17 @@
+{
+  "name": "hono-upstash",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/app.ts --bundle --format=iife --global-name=__ic_edge_bundle --platform=neutral --outfile=dist/app.bundle.js"
+  },
+  "dependencies": {
+    "@upstash/redis": "^1.35.3",
+    "hono": "^4.7.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}
+

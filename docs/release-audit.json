@@ -1,0 +1,80 @@
+{
+  "objective": "Durable Edge Runtime on ICP v1 preview Worker-compatible Core+Cache",
+  "complete": true,
+  "completion_rule": "Every v1 release requirement must have command output or direct canister/Gateway evidence. Secret-dependent third-party API smoke is optional and non-blocking.",
+  "current_blocker": null,
+  "verified": [
+    {
+      "requirement": "quickjs-ic single canister backend",
+      "evidence": "scripts/build_canister_backend_wasm.sh builds wasm32-wasip1 with --features quickjs-ic, stubs WASI imports, then runs wasi2ic"
+    },
+    {
+      "requirement": "post-link wasm import audit",
+      "evidence": "wasm-objdump scan confirms no env.* or wasi_snapshot_preview1.* imports"
+    },
+    {
+      "requirement": "Worker Core Web API subset",
+      "evidence": "cargo test -p ic-edge-runtime --test web_api"
+    },
+    {
+      "requirement": "Cache API subset",
+      "evidence": "web_api tests cover caches.default, caches.open, match, put, delete; scripts/icp_local_smoke.sh covers canister stable cache"
+    },
+    {
+      "requirement": "Streams unsupported contract",
+      "evidence": "docs/compatibility.md and docs/runtime-api.md mark Streams unsupported for v1"
+    },
+    {
+      "requirement": "fixed resource limits",
+      "evidence": "ic_edge_web::limits plus canister/runtime enforcement for bundle, body, response, fetch, cache, env, and history limits"
+    },
+    {
+      "requirement": "runtime rollback",
+      "evidence": "runtime_history and rollback_runtime canister API plus canister-template unit tests"
+    },
+    {
+      "requirement": "Hono package smoke",
+      "evidence": "scripts/package_smoke.sh checks Hono routes, numeric JSON, Uint8Array body, Cache roundtrip, zod, jose, fetch, OpenAI mock, Upstash mock"
+    },
+    {
+      "requirement": "local canister smoke",
+      "evidence": "scripts/icp_local_smoke.sh checks deploy, upload, env, rollback, direct update, Gateway, HTTPS outcall, stable Cache, zod, fetch, jose"
+    },
+    {
+      "requirement": "canister interface consistency",
+      "evidence": "scripts/check_canister_interface.sh validates runtime_history and rollback_runtime"
+    },
+    {
+      "requirement": "release docs",
+      "evidence": "README.md, docs/runtime-api.md, docs/compatibility.md, docs/security-model.md, docs/limitations.md, docs/release-checklist.md"
+    },
+    {
+      "requirement": "v1 preview semver policy",
+      "evidence": "crate and canister-template versions are 0.2.0; README and release checklist state that v1 is the API/product contract"
+    },
+    {
+      "requirement": "QuickJS binding replacement criteria",
+      "evidence": "docs/quickjs-backend-comparison.md records current quickjs-wasm-rs risk and replacement criteria"
+    },
+    {
+      "requirement": "mainnet preflight scope decision",
+      "evidence": "docs/release-checklist.md keeps local deploy smoke as the release gate and marks mainnet preflight out of scope"
+    }
+  ],
+  "pending": [],
+  "optional": [
+    {
+      "requirement": "OpenAI real HTTPS outcall",
+      "release_blocker": false,
+      "reason": "JS external fetch is verified through direct example.com outcall and hono-fetch canister smoke. OpenAI requires user-provided API key.",
+      "evidence_command": "IC_EDGE_FULL_SMOKE=1 OPENAI_API_KEY=... scripts/icp_local_smoke.sh"
+    },
+    {
+      "requirement": "Upstash real HTTPS outcall",
+      "release_blocker": false,
+      "reason": "JS external fetch is verified through direct example.com outcall and hono-fetch canister smoke. Upstash requires user-provided REST token.",
+      "evidence_command": "IC_EDGE_FULL_SMOKE=1 UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... scripts/icp_local_smoke.sh"
+    }
+  ],
+  "success_command": "scripts/ci_local.sh && scripts/icp_local_smoke.sh"
+}

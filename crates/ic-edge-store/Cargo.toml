@@ -1,0 +1,12 @@
+[package]
+name = "ic-edge-store"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+ic-stable-structures = "0.7.2"

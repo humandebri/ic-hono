@@ -1,0 +1,17 @@
+{
+  "name": "hono-zod",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "esbuild src/app.ts --bundle --format=iife --global-name=__ic_edge_bundle --platform=neutral --outfile=dist/app.bundle.js"
+  },
+  "dependencies": {
+    "hono": "^4.7.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.8.0"
+  }
+}
+
