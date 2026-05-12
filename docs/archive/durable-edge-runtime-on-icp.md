@@ -1,7 +1,9 @@
 # Durable Edge Runtime on ICP 計画書
 
+Archive note: 現行仕様は [`docs/README.md`](../README.md) から辿る文書を正とする。この文書は設計背景と初期計画の記録。
+
 この文書は設計計画。release 可否の根拠は
-[`docs/release-checklist.md`](release-checklist.md) の実 evidence を使う。
+[`docs/release-checklist.md`](../release-checklist.md) の実 evidence を使う。
 
 ## 目的
 
@@ -244,7 +246,7 @@ ic-edge/
 
 ## 成功条件
 
-v0.1 の成功条件は [`release-checklist.md`](release-checklist.md) で管理する。
+v0.1 の成功条件は [`release-checklist.md`](../release-checklist.md) で管理する。
 host smoke だけでは release 完了扱いにしない。fresh `icp build` /
 `icp deploy`、direct update、IC Gateway、実 HTTPS outcall の evidence が必要。
 

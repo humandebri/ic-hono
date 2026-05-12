@@ -101,10 +101,9 @@ Mainnet preflight is not part of the v1 preview gate. Local deploy smoke is the 
 - [Compatibility Matrix](docs/compatibility.md)
 - [Limitations](docs/limitations.md)
 - [Security Model](docs/security-model.md)
-- [Determinism Model](docs/determinism-model.md)
-- [HTTPS Outcalls Model](docs/https-outcalls-model.md)
-- [Juno Positioning](docs/juno-positioning.md)
 - [Release Checklist](docs/release-checklist.md)
+
+See [Docs Index](docs/README.md) for runtime model, HTTPS outcalls, positioning, release evidence, and archived planning notes.
 
 ## Contributing
 
