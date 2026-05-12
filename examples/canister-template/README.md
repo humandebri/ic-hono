@@ -1,6 +1,7 @@
 # Canister Template
 
 IC HTTP endpoint と bundle upload 入口の最小形。
+Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 
 `icp.yaml` は backend build script を使う。v1 は `quickjs-ic` のみを使い、`wasm32-wasip1` build 後に WASI import stub と `wasi2ic` 変換を行う。
 

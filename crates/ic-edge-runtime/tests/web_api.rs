@@ -150,6 +150,41 @@ fn request_constructor_copies_request_and_allows_init_overrides() {
 }
 
 #[test]
+fn request_constructor_rejects_used_body_and_get_body() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                const original = new Request('https://edge.test/a', {
+                  method: 'POST',
+                  body: 'original'
+                })
+                await original.text()
+                let usedBodyError = ''
+                try {
+                  new Request(original)
+                } catch (error) {
+                  usedBodyError = error.name
+                }
+                let getBodyError = ''
+                try {
+                  new Request('https://edge.test/a', { method: 'GET', body: 'x' })
+                } catch (error) {
+                  getBodyError = error.name
+                }
+                return Response.json({ usedBodyError, getBodyError })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"usedBodyError":"TypeError","getBodyError":"TypeError"}"#
+    );
+}
+
+#[test]
 fn aborted_fetch_rejects_before_host_fetch() {
     let mut runtime = QuickJsRuntime::new().unwrap();
     runtime
@@ -207,6 +242,28 @@ fn url_search_params_and_form_data_cover_edge_subset() {
     assert_eq!(
         response.body.text().unwrap(),
         r#"{"plus":"a b","encoded":"a+b","query":"space=a%20b&space=again","hasSpace":true,"allSpace":["a b","again"],"seen":["space:a b","space:again"],"form":"edge","entries":[["name","edge"]]}"#
+    );
+}
+
+#[test]
+fn url_constructor_resolves_relative_references_against_base() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                return Response.json({
+                  relative: new URL('b', 'https://example.test/a/c').href,
+                  query: new URL('?q=1', 'https://example.test/a/c').href,
+                  absolutePath: new URL('/root', 'https://example.test/a/c').href
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"relative":"https://example.test/a/b","query":"https://example.test/a/c?q=1","absolutePath":"https://example.test/root"}"#
     );
 }
 
@@ -327,6 +384,28 @@ fn cache_api_expires_max_age_zero_and_keeps_entries_without_ttl() {
     );
 }
 
+#[test]
+fn cache_api_preserves_binary_response_bodies() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                await caches.default.put(
+                  'https://cache.test/bin',
+                  new Response(new Uint8Array([255, 0, 128]))
+                )
+                const hit = await caches.default.match('https://cache.test/bin')
+                return Response.json({
+                  bytes: Array.from(new Uint8Array(await hit.arrayBuffer()))
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(response.body.text().unwrap(), r#"{"bytes":[255,0,128]}"#);
+}
+
 struct EchoFetch;
 
 impl HostFetch for EchoFetch {
@@ -360,6 +439,54 @@ fn fetch_post_body_keeps_non_utf8_bytes() {
         .unwrap();
     let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
     assert_eq!(response.body.text().unwrap(), r#"{"echoed":"[255,0,128]"}"#);
+}
+
+#[test]
+fn fetch_consumes_request_body_and_keeps_empty_override() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime.install_fetch(EchoFetch).unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                const original = new Request('https://api.example.test/echo', {
+                  method: 'POST',
+                  body: 'abc'
+                })
+                const emptyEcho = await (await fetch(original, { body: '' })).text()
+                const usedAfterOverride = original.bodyUsed
+                await fetch(original)
+                const usedAfterFetch = original.bodyUsed
+                let secondRead = ''
+                try {
+                  await original.text()
+                } catch (error) {
+                  secondRead = error.name
+                }
+                let getBodyError = ''
+                try {
+                  await fetch('https://api.example.test/echo', {
+                    method: 'GET',
+                    body: 'x'
+                  })
+                } catch (error) {
+                  getBodyError = error.name
+                }
+                return Response.json({
+                  emptyEcho,
+                  usedAfterOverride,
+                  usedAfterFetch,
+                  secondRead,
+                  getBodyError
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"emptyEcho":"[]","usedAfterOverride":false,"usedAfterFetch":true,"secondRead":"TypeError","getBodyError":"TypeError"}"#
+    );
 }
 
 #[test]
@@ -425,5 +552,47 @@ fn get_random_values_uses_byte_length_and_validates_input() {
     assert_eq!(
         response.body.text().unwrap(),
         r#"{"bytes":[1,2,3,4,5,6,7,8],"typeError":"TypeError","limitError":"crypto.getRandomValues exceeds 65536 bytes"}"#
+    );
+}
+
+#[test]
+fn response_headers_blob_and_text_decoder_follow_web_contracts() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                const customJson = Response.json(
+                  { ok: true },
+                  { headers: { 'content-type': 'application/problem+json' } }
+                )
+                const blob = new Blob([new Uint8Array([255, 0, 128])])
+                let invalidStatusError = ''
+                try {
+                  new Response('x', { status: 99 })
+                } catch (error) {
+                  invalidStatusError = error.name
+                }
+                let invalidHeaderError = ''
+                try {
+                  new Headers().set('bad name', 'x')
+                } catch (error) {
+                  invalidHeaderError = error.name
+                }
+                return Response.json({
+                  contentType: customJson.headers.get('content-type'),
+                  blobBytes: Array.from(new Uint8Array(await blob.arrayBuffer())),
+                  replacement: new TextDecoder().decode(new Uint8Array([255])),
+                  decodedBuffer: new TextDecoder().decode(new TextEncoder().encode('ok').buffer),
+                  invalidStatusError,
+                  invalidHeaderError
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"contentType":"application/problem+json","blobBytes":[255,0,128],"replacement":"�","decodedBuffer":"ok","invalidStatusError":"RangeError","invalidHeaderError":"TypeError"}"#
     );
 }

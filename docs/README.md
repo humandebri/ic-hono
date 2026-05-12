@@ -6,8 +6,10 @@ Durable Edge Runtime on ICP v1 preview の文書索引。現行仕様はこの�
 
 1. [Quickstart](quickstart.md): local smoke、local ICP flow、新規 app 作成。
 2. [Runtime API](runtime-api.md): Rust traits、bundle contract、Web API subset、canister API。
-3. [Compatibility Matrix](compatibility.md): package、Hono、Web Standards の検証状況。
-4. [Limitations](limitations.md): 非対応 API、固定上限、backend 制約。
+3. [Public API Contract](public-api-contract.md): v1 preview の固定公開 API。
+4. [Library Guide](library.md): crate 構成、feature flags、MSRV、semver、publish check。
+5. [Compatibility Matrix](compatibility.md): package、Hono、Web Standards の検証状況。
+6. [Limitations](limitations.md): 非対応 API、固定上限、backend 制約。
 
 ## Runtime Model
 
@@ -20,6 +22,7 @@ Durable Edge Runtime on ICP v1 preview の文書索引。現行仕様はこの�
 
 - [Release Checklist](release-checklist.md): local release gate と product contract。
 - [Release Audit](release-audit.json): machine-readable release evidence。
+- [Roadmap](roadmap.md): known limitations の issue 化。
 
 ## Positioning
 
@@ -27,6 +30,7 @@ Durable Edge Runtime on ICP v1 preview の文書索引。現行仕様はこの�
 
 ## Examples
 
+- [Cookbook](cookbook.md): examples を使った実装 recipes。
 - [Hono Basic](../examples/hono-basic/README.md): basic route、JSON、params/query、CORS、Cache。
 - [Hono Fetch](../examples/hono-fetch/README.md): JS `fetch()` bridge。
 - [Hono with jose](../examples/hono-jose/README.md): HS256 sign/verify。

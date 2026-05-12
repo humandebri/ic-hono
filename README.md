@@ -36,6 +36,30 @@ Not supported in v1 preview:
 - `ic-edge-pack`: local init / pack / upload CLI
 - `examples/*`: Hono and package compatibility examples
 
+## Library Use
+
+Use `ic-edge-web` for runtime-neutral HTTP values, `ic-edge-runtime` to embed the QuickJS runtime, `ic-edge-canister` to map IC HTTP and HTTPS outcalls, `ic-edge-store` for memory/stable-memory storage, and `ic-edge-pack` for bundle packaging.
+
+```rust
+use ic_edge_runtime::{EdgeRuntime, QuickJsRuntime};
+use ic_edge_web::{Body, Headers, Request};
+
+let mut runtime = QuickJsRuntime::new()?;
+runtime.eval_module(
+    "app",
+    "globalThis.__ic_edge_app = { fetch: async () => new Response('ok') }",
+)?;
+let response = runtime.call_app_fetch(Request::new(
+    "GET".to_string(),
+    "/".to_string(),
+    Headers::new(),
+    Body::empty(),
+))?;
+# Ok::<(), ic_edge_web::Error>(())
+```
+
+See [Library Guide](docs/library.md) for crate roles, feature flags, MSRV, semver policy, and publish checks.
+
 ## Quickstart
 
 Prerequisites:
@@ -89,6 +113,7 @@ Before publishing changes, run:
 ```bash
 scripts/ci_local.sh
 scripts/icp_local_smoke.sh
+scripts/package_crates.sh
 ```
 
 Mainnet preflight is not part of the v1 preview gate. Local deploy smoke is the required release gate.

@@ -14,6 +14,7 @@ use std::future::Future;
 use std::pin::Pin;
 use std::rc::Rc;
 
+/// Wasm QuickJS runtime used inside canisters with the `quickjs-ic` feature.
 pub struct QuickJsRuntime {
     context: JSContextRef,
     async_fetcher: Option<Box<dyn AsyncHostFetch>>,
@@ -21,6 +22,7 @@ pub struct QuickJsRuntime {
 }
 
 impl QuickJsRuntime {
+    /// Creates a canister-compatible QuickJS runtime.
     pub fn new() -> Result<Self> {
         let runtime = Self {
             context: JSContextRef::default(),
@@ -31,6 +33,7 @@ impl QuickJsRuntime {
         Ok(runtime)
     }
 
+    /// Installs the async host fetch bridge.
     pub fn install_async_fetch<F>(&mut self, fetcher: F)
     where
         F: AsyncHostFetch + 'static,
@@ -38,6 +41,7 @@ impl QuickJsRuntime {
         self.async_fetcher = Some(Box::new(fetcher));
     }
 
+    /// Installs a Cache API persistence backend.
     pub fn install_cache<C>(&mut self, cache: C)
     where
         C: CacheHost + 'static,
@@ -45,10 +49,12 @@ impl QuickJsRuntime {
         *self.cache_host.borrow_mut() = Some(Box::new(cache));
     }
 
+    /// Installs the per-request random seed used by `crypto.getRandomValues`.
     pub fn install_random_seed(&self, seed: Vec<u8>) -> Result<()> {
         quickjs_wasm_crypto::install_random_seed(&self.context, seed)
     }
 
+    /// Installs the per-request IC time in nanoseconds.
     pub fn install_time_nanos(&self, time_nanos: u64) -> Result<()> {
         let script = format!(
             "globalThis.ic ||= {{}}; globalThis.ic.time = () => BigInt({})",
@@ -56,6 +62,19 @@ impl QuickJsRuntime {
         );
         self.context
             .eval_global("ic-time.js", &script)
+            .map_err(to_runtime_error)?;
+        Ok(())
+    }
+
+    /// Installs per-request IC identity values.
+    pub fn install_ic_context(&self, caller: &str, canister_id: &str) -> Result<()> {
+        let script = format!(
+            "globalThis.ic ||= {{}}; globalThis.ic.caller = () => {}; globalThis.ic.canisterId = () => {}",
+            json_string(caller)?,
+            json_string(canister_id)?
+        );
+        self.context
+            .eval_global("ic-context.js", &script)
             .map_err(to_runtime_error)?;
         Ok(())
     }

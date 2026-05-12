@@ -12,8 +12,14 @@ resolver = "2"
 
 [workspace.package]
 edition = "2021"
+rust-version = "1.85"
 license = "MIT"
 repository = "https://github.com/humandebri/ic-hono"
+homepage = "https://github.com/humandebri/ic-hono"
+documentation = "https://docs.rs/ic-edge-runtime"
+readme = "README.md"
+keywords = ["internet-computer", "hono", "edge", "worker", "quickjs"]
+categories = ["wasm", "web-programming"]
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

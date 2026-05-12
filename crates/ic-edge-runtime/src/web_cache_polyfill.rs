@@ -9,10 +9,7 @@ const __ic_edge_cache_key = (input, options = {}) => {
 }
 
 const __ic_edge_cache_response_json = async (response) => {
-  const bodyText = await response.text()
-  const bodyValue = response.body instanceof Uint8Array
-    ? Array.from(response.body)
-    : bodyText
+  const bodyValue = Array.from(body_bytes(consume_body(response)))
   const expiresAt = __ic_edge_cache_expires_at(response.headers.get('cache-control'))
   return JSON.stringify({
     status: response.status,

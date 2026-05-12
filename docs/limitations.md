@@ -1,6 +1,7 @@
 # Limitations
 
 v1 preview Worker互換 Core+Cache runtime の制約。crate semver は `0.2.0`。
+実装 issue は [`roadmap.md`](roadmap.md) に集約する。
 
 ## Runtime
 

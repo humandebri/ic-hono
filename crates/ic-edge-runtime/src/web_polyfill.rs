@@ -2,6 +2,13 @@
 //! It is intentionally small until the Hono compatibility suite demands more.
 
 pub const SOURCE: &str = r#"
+const __ic_edge_header_token = /^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/
+const __ic_edge_validate_header_name = (name) => {
+  const value = String(name)
+  if (!__ic_edge_header_token.test(value)) throw new TypeError('Invalid header name')
+  return value.toLowerCase()
+}
+
 class Headers {
   constructor(init = []) {
     this._values = []
@@ -13,24 +20,24 @@ class Headers {
     for (const [name, value] of init) this.append(name, value)
   }
   append(name, value) {
-    this._values.push([String(name).toLowerCase(), String(value)])
+    this._values.push([__ic_edge_validate_header_name(name), String(value)])
   }
   set(name, value) {
-    const key = String(name).toLowerCase()
+    const key = __ic_edge_validate_header_name(name)
     this._values = this._values.filter(([item]) => item !== key)
     this._values.push([key, String(value)])
   }
   delete(name) {
-    const key = String(name).toLowerCase()
+    const key = __ic_edge_validate_header_name(name)
     this._values = this._values.filter(([item]) => item !== key)
   }
   get(name) {
-    const key = String(name).toLowerCase()
+    const key = __ic_edge_validate_header_name(name)
     const found = this._values.filter(([item]) => item === key).map(([, value]) => value)
     return found.length === 0 ? null : found.join(', ')
   }
   has(name) {
-    const key = String(name).toLowerCase()
+    const key = __ic_edge_validate_header_name(name)
     return this._values.some(([item]) => item === key)
   }
   forEach(callback, thisArg = undefined) {
@@ -68,6 +75,10 @@ class Request {
     this.url = isRequest ? input.url : String(input)
     this.method = String(init.method || (isRequest ? input.method : 'GET')).toUpperCase()
     this.headers = init.headers ? new Headers(init.headers) : new Headers(isRequest ? input.headers : [])
+    if (isRequest && !hasBody && input.bodyUsed) throw new TypeError('Body has already been used')
+    if ((this.method === 'GET' || this.method === 'HEAD') && hasBody && init.body !== null && init.body !== undefined) {
+      throw new TypeError('Request with GET/HEAD method cannot have body')
+    }
     this._body = body_from(hasBody ? init.body : (isRequest ? input.body : ''))
     this.signal = init.signal || (isRequest ? input.signal : undefined)
     this.bodyUsed = false
@@ -105,7 +116,10 @@ class Request {
 
 class Response {
   constructor(body = '', init = {}) {
-    this.status = init.status || 200
+    this.status = Object.prototype.hasOwnProperty.call(init, 'status') ? Number(init.status) : 200
+    if (!Number.isInteger(this.status) || this.status < 200 || this.status > 599) {
+      throw new RangeError('Response status must be in the range 200 to 599')
+    }
     this.statusText = init.statusText || ''
     this.headers = new Headers(init.headers || [])
     this._body = body_from(body === null ? '' : body)
@@ -149,7 +163,7 @@ class Response {
   }
   static json(value, init = {}) {
     const response = new Response(JSON.stringify(value), init)
-    response.headers.set('content-type', 'application/json')
+    if (!response.headers.has('content-type')) response.headers.set('content-type', 'application/json')
     return response
   }
   get [Symbol.toStringTag]() {
@@ -160,7 +174,7 @@ class Response {
 class Blob {
   constructor(parts = [], init = {}) {
     this.type = String(init.type || '')
-    this._body = body_from(parts.map((part) => body_text(body_from(part))).join(''))
+    this._body = body_concat(parts.map((part) => body_from(part)))
     this.size = body_bytes(this._body).byteLength
   }
   text() {
@@ -226,19 +240,90 @@ class TextEncoder {
   }
 }
 class TextDecoder {
+  constructor(_label = 'utf-8', options = {}) {
+    this.fatal = Boolean(options.fatal)
+  }
   decode(input = []) {
-    const text = Array.from(input).map((byte) => String.fromCharCode(byte)).join('')
-    return decodeURIComponent(escape(text))
+    const bytes = body_bytes(body_from(input))
+    let output = ''
+    for (let index = 0; index < bytes.length;) {
+      const first = bytes[index]
+      let codePoint = 0
+      let needed = 0
+      let minimum = 0
+      if (first <= 0x7f) {
+        output += String.fromCharCode(first)
+        index += 1
+        continue
+      } else if (first >= 0xc2 && first <= 0xdf) {
+        codePoint = first & 0x1f
+        needed = 1
+        minimum = 0x80
+      } else if (first >= 0xe0 && first <= 0xef) {
+        codePoint = first & 0x0f
+        needed = 2
+        minimum = 0x800
+      } else if (first >= 0xf0 && first <= 0xf4) {
+        codePoint = first & 0x07
+        needed = 3
+        minimum = 0x10000
+      } else {
+        if (this.fatal) throw new TypeError('Invalid UTF-8')
+        output += '\ufffd'
+        index += 1
+        continue
+      }
+      if (index + needed >= bytes.length) {
+        if (this.fatal) throw new TypeError('Invalid UTF-8')
+        output += '\ufffd'
+        index += 1
+        continue
+      }
+      let valid = true
+      for (let offset = 1; offset <= needed; offset++) {
+        const byte = bytes[index + offset]
+        if ((byte & 0xc0) !== 0x80) {
+          valid = false
+          break
+        }
+        codePoint = (codePoint << 6) | (byte & 0x3f)
+      }
+      if (!valid || codePoint < minimum || codePoint > 0x10ffff || (codePoint >= 0xd800 && codePoint <= 0xdfff)) {
+        if (this.fatal) throw new TypeError('Invalid UTF-8')
+        output += '\ufffd'
+        index += 1
+        continue
+      }
+      output += codePoint <= 0xffff
+        ? String.fromCharCode(codePoint)
+        : String.fromCharCode(0xd800 + ((codePoint - 0x10000) >> 10), 0xdc00 + ((codePoint - 0x10000) & 0x3ff))
+      index += needed + 1
+    }
+    return output
   }
 }
 const body_from = (value = '') => {
   if (value === null || value === undefined) return ''
+  if (value instanceof Blob) return new Uint8Array(value._body)
   if (value instanceof Uint8Array) return new Uint8Array(value)
   if (value instanceof ArrayBuffer) return new Uint8Array(value)
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
   return String(value)
 }
 const body_bytes = (value = '') => {
   return value instanceof Uint8Array ? value : new TextEncoder().encode(value)
+}
+
+const body_concat = (parts) => {
+  const chunks = parts.map(body_bytes)
+  const size = chunks.reduce((total, chunk) => total + chunk.byteLength, 0)
+  const output = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    output.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return output
 }
 
 const body_text = (value = '') => {

@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compatibility:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install system tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y wabt
+      - name: Install wasm tools
+        run: |
+          cargo install ic-wasm
+          cargo install wasi2ic
+      - name: Install example dependencies
+        run: |
+          npm install --prefix examples/hono-basic
+          npm install --prefix examples/hono-zod
+          npm install --prefix examples/hono-fetch
+          npm install --prefix examples/hono-openai
+          npm install --prefix examples/hono-upstash
+          npm install --prefix examples/hono-jose
+      - name: Local CI
+        run: scripts/ci_local.sh
+      - name: Compatibility matrix
+        run: scripts/check_compatibility_matrix.sh

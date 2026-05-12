@@ -17,6 +17,18 @@
       "evidence": "cargo test -p ic-edge-runtime --test web_api"
     },
     {
+      "requirement": "public API contract",
+      "evidence": "docs/public-api-contract.md and scripts/check_api_contract.sh define and verify the v1 preview public surface"
+    },
+    {
+      "requirement": "crate publish readiness",
+      "evidence": "scripts/package_crates.sh runs tests, docs, package verification, and first-stage publish dry-run for dependency-free crates"
+    },
+    {
+      "requirement": "compatibility matrix CI",
+      "evidence": "scripts/check_compatibility_matrix.sh and .github/workflows/ci.yml keep docs/compatibility.md tied to smoke coverage"
+    },
+    {
       "requirement": "Cache API subset",
       "evidence": "web_api tests cover caches.default, caches.open, match, put, delete; scripts/icp_local_smoke.sh covers canister stable cache"
     },
@@ -46,7 +58,7 @@
     },
     {
       "requirement": "release docs",
-      "evidence": "README.md, docs/README.md, docs/runtime-api.md, docs/compatibility.md, docs/security-model.md, docs/limitations.md, docs/release-checklist.md"
+      "evidence": "README.md, docs/README.md, docs/public-api-contract.md, docs/runtime-api.md, docs/compatibility.md, docs/security-model.md, docs/limitations.md, docs/cookbook.md, docs/roadmap.md, docs/release-checklist.md"
     },
     {
       "requirement": "OSS metadata",
@@ -61,8 +73,8 @@
       "evidence": "docs/quickjs-backend-comparison.md records current quickjs-wasm-rs risk and replacement criteria"
     },
     {
-      "requirement": "mainnet preflight scope decision",
-      "evidence": "docs/release-checklist.md keeps local deploy smoke as the release gate and marks mainnet preflight out of scope"
+      "requirement": "mainnet preflight release gate",
+      "evidence": "IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh builds locally, audits wasm imports, checks mainnet identity/cycles, and checks edge canister status with -e ic"
     }
   ],
   "pending": [],
@@ -80,5 +92,5 @@
       "evidence_command": "IC_EDGE_FULL_SMOKE=1 UPSTASH_REDIS_REST_URL=... UPSTASH_REDIS_REST_TOKEN=... scripts/icp_local_smoke.sh"
     }
   ],
-  "success_command": "scripts/ci_local.sh && scripts/icp_local_smoke.sh"
+  "success_command": "scripts/ci_local.sh && scripts/check_compatibility_matrix.sh && scripts/package_crates.sh && scripts/icp_local_smoke.sh && IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh"
 }

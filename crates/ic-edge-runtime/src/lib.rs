@@ -38,38 +38,52 @@ pub use quickjs_wasm::QuickJsRuntime;
 use std::future::Future;
 use std::pin::Pin;
 
+/// Synchronous runtime boundary for evaluating a bundle and calling `app.fetch`.
 pub trait EdgeRuntime {
+    /// Evaluates a named JavaScript module or bundle.
     fn eval_module(&mut self, name: &str, source: &str) -> Result<()>;
+    /// Calls the loaded app's `fetch(request)` entrypoint.
     fn call_app_fetch(&mut self, request: Request) -> Result<Response>;
 }
 
+/// Async runtime boundary for canister HTTPS outcalls.
 pub trait AsyncEdgeRuntime {
+    /// Evaluates a named JavaScript module or bundle.
     fn eval_module(&mut self, name: &str, source: &str) -> Result<()>;
+    /// Calls the loaded app's `fetch(request)` entrypoint and allows host async work.
     fn call_app_fetch<'a>(
         &'a mut self,
         request: Request,
     ) -> Pin<Box<dyn Future<Output = Result<Response>> + 'a>>;
 }
 
+/// Async host fetch implementation used by the wasm QuickJS runtime.
 pub trait AsyncHostFetch {
+    /// Performs an external fetch for a JavaScript `fetch()` request.
     fn fetch<'a>(
         &'a mut self,
         request: Request,
     ) -> Pin<Box<dyn Future<Output = Result<Response>> + 'a>>;
 }
 
+/// Persistence boundary backing the Worker Cache API subset.
 pub trait CacheHost {
+    /// Reads a serialized cached response.
     fn match_entry(&mut self, cache_name: &str, key: &str) -> Result<Option<String>>;
+    /// Stores a serialized cached response.
     fn put_entry(&mut self, cache_name: &str, key: &str, response_json: &str) -> Result<()>;
+    /// Deletes a cached response.
     fn delete_entry(&mut self, cache_name: &str, key: &str) -> Result<bool>;
 }
 
+/// Minimal test runtime used by canister bridge unit tests.
 #[derive(Debug, Default)]
 pub struct StaticRuntime {
     loaded_module: Option<(String, String)>,
 }
 
 impl StaticRuntime {
+    /// Creates a static runtime returning `ok`.
     pub fn new() -> Self {
         Self::default()
     }

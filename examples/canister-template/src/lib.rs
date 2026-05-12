@@ -198,6 +198,10 @@ async fn handle_uploaded_bundle_async(
     let mut runtime = take_runtime(generation, &env, &source)?;
     runtime.install_random_seed(seed)?;
     runtime.install_time_nanos(time_nanos)?;
+    runtime.install_ic_context(
+        &ic_cdk::api::msg_caller().to_string(),
+        &ic_cdk::api::canister_self().to_string(),
+    )?;
     let response = handle_cdk_http_async(&mut runtime, request).await;
     store_runtime(generation, runtime);
     response

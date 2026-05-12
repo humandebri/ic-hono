@@ -5,16 +5,21 @@ use ic_edge_loader::BundleManifest;
 use ic_edge_store::{EdgeStore, Result as StoreResult};
 use std::path::{Path, PathBuf};
 
+/// Request describing one local bundle operation.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PackRequest {
+    /// Source entrypoint file.
     pub entrypoint: String,
+    /// Bundle output file.
     pub out_file: String,
 }
 
+/// Converts a pack request into the runtime bundle manifest.
 pub fn manifest_for_request(request: PackRequest) -> BundleManifest {
     BundleManifest::single_bundle(request.entrypoint, request.out_file)
 }
 
+/// Returns `dist/<entrypoint-stem>.bundle.js`.
 pub fn default_out_file(entrypoint: &Path) -> PathBuf {
     let file_name = entrypoint
         .file_stem()
@@ -23,6 +28,7 @@ pub fn default_out_file(entrypoint: &Path) -> PathBuf {
     PathBuf::from("dist").join(format!("{file_name}.bundle.js"))
 }
 
+/// Stores a bundle under `module_path`.
 pub fn upload_bundle(
     store: &mut impl EdgeStore,
     module_path: &str,

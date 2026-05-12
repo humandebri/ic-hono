@@ -5,22 +5,33 @@ use ic_stable_structures::memory_manager::{MemoryId, MemoryManager, VirtualMemor
 use ic_stable_structures::{DefaultMemoryImpl, StableBTreeMap};
 use std::collections::BTreeMap as StdBTreeMap;
 
+/// Result type used by storage backends.
 pub type Result<T> = std::result::Result<T, Error>;
 
+/// Storage errors exposed by the v1 preview store API.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
+    /// Requested module does not exist.
     NotFound,
+    /// Stable or memory storage failed.
     StorageFailure,
 }
 
+/// Storage boundary for bundles and runtime key-value data.
 pub trait EdgeStore {
+    /// Reads a stored bundle module.
     fn get_module(&self, path: &str) -> Result<Vec<u8>>;
+    /// Stores a bundle module.
     fn put_module(&mut self, path: &str, bytes: &[u8]) -> Result<()>;
+    /// Reads optional key-value data.
     fn get_kv(&self, key: &str) -> Result<Option<Vec<u8>>>;
+    /// Stores key-value data.
     fn put_kv(&mut self, key: &str, value: &[u8]) -> Result<()>;
+    /// Deletes key-value data.
     fn delete_kv(&mut self, key: &str) -> Result<()>;
 }
 
+/// In-memory store for host tests and local tooling.
 #[derive(Debug, Default)]
 pub struct MemoryEdgeStore {
     modules: StdBTreeMap<String, Vec<u8>>,
@@ -28,6 +39,7 @@ pub struct MemoryEdgeStore {
 }
 
 impl MemoryEdgeStore {
+    /// Creates an empty memory store.
     pub fn new() -> Self {
         Self::default()
     }
@@ -35,12 +47,14 @@ impl MemoryEdgeStore {
 
 type StableMemory = VirtualMemory<DefaultMemoryImpl>;
 
+/// Stable-memory store for canister templates.
 pub struct StableEdgeStore {
     modules: StableBTreeMap<String, Vec<u8>, StableMemory>,
     kv: StableBTreeMap<String, Vec<u8>, StableMemory>,
 }
 
 impl StableEdgeStore {
+    /// Creates a stable store using memory IDs 0 and 1.
     pub fn new() -> Self {
         let manager = MemoryManager::init(DefaultMemoryImpl::default());
         Self {

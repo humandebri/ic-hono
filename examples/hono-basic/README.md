@@ -1,6 +1,7 @@
 # Hono Basic
 
 最初の互換性目標。
+Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 
 ```bash
 npm install
@@ -18,4 +19,3 @@ IC HTTP request
 -> Rust HttpResponse
 -> IC response
 ```
-

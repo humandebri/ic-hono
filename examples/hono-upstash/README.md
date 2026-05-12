@@ -1,6 +1,7 @@
 # Hono with Upstash Redis
 
 `@upstash/redis` HTTP client smoke。
+Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 
 bundle に Upstash secret は埋め込まない。`process.env.UPSTASH_REDIS_REST_URL` と `process.env.UPSTASH_REDIS_REST_TOKEN` から読む。
 example は runtime smoke の決定性を優先して Upstash telemetry を無効化する。

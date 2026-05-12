@@ -1,6 +1,7 @@
 # Hono with OpenAI
 
 OpenAI SDK non-streaming smoke。
+Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 
 bundle に API key は埋め込まない。`process.env.OPENAI_API_KEY` から読む。
 model は `process.env.OPENAI_MODEL` で指定できる。未指定時は OpenAI docs の Responses API text generation 例に合わせて `gpt-5.2` を使う。

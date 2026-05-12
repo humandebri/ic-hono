@@ -4,11 +4,18 @@ version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+description = "Packaging library and ic-edge CLI for Hono bundles targeting ICP canisters."
+keywords.workspace = true
+categories.workspace = true
+readme.workspace = true
 
 [dependencies]
-ic-edge-loader = { path = "../ic-edge-loader" }
-ic-edge-store = { path = "../ic-edge-store" }
-ic-edge-web = { path = "../ic-edge-web" }
+ic-edge-loader = { version = "0.2.0", path = "../ic-edge-loader" }
+ic-edge-store = { version = "0.2.0", path = "../ic-edge-store" }
+ic-edge-web = { version = "0.2.0", path = "../ic-edge-web" }
 
 [[bin]]
 name = "ic-edge"

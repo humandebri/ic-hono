@@ -20,7 +20,11 @@ globalThis.fetch = (input, init = {}) => {
   if (init.headers) {
     for (const [name, value] of new Headers(init.headers)) headers.set(name, value)
   }
-  const body = init.body || (isRequest ? input.body : '')
+  const hasInitBody = Object.prototype.hasOwnProperty.call(init, 'body')
+  if ((method === 'GET' || method === 'HEAD') && hasInitBody && init.body !== null && init.body !== undefined) {
+    return Promise.reject(new TypeError('Request with GET/HEAD method cannot have body'))
+  }
+  const body = hasInitBody ? init.body : (isRequest ? consume_body(input) : '')
   const responseJson = globalThis.__ic_edge_host_fetch(
     method,
     url,
@@ -39,7 +43,10 @@ globalThis.__ic_edge_dispatch = (method, url, headersJson, bodyJson) => {
   const requestUrl = url.startsWith('http://') || url.startsWith('https://')
     ? url
     : `https://ic-edge.local${url.startsWith('/') ? url : `/${url}`}`
-  const request = new Request(requestUrl, { method, headers: JSON.parse(headersJson), body: __ic_edge_body_from_json(bodyJson) })
+  const body = __ic_edge_body_from_json(bodyJson)
+  const init = { method, headers: JSON.parse(headersJson) }
+  if (!(method === 'GET' || method === 'HEAD') || body.byteLength > 0) init.body = body
+  const request = new Request(requestUrl, init)
   globalThis.__ic_edge_output = undefined
   globalThis.__ic_edge_error = undefined
   globalThis.__ic_edge_console_error = undefined

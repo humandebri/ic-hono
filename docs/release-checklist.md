@@ -8,15 +8,19 @@ crate semver は `0.2.0`。`v1` は API/product contract 名として扱う。
 
 - [x] `cargo fmt --all --check`
 - [x] `cargo test`
+- [x] `scripts/check_api_contract.sh`
+- [x] `scripts/check_compatibility_matrix.sh`
 - [x] `scripts/check_canister_interface.sh`
 - [x] `scripts/check_release_audit.sh`
 - [x] `scripts/package_smoke.sh`
 - [x] `cargo build --target wasm32-wasip1 -p ic-edge-canister-template --release --features quickjs-ic`
 - [x] `scripts/build_canister_backend_wasm.sh /tmp/ic_edge_runtime_import_check.wasm`
 - [x] wasm import audit: no `env.*` or `wasi_snapshot_preview1.*`
+- [x] `scripts/package_crates.sh`
 - [x] `scripts/icp_local_smoke.sh`
+- [x] `IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh`
 
-Mainnet preflight は今回 scope 外。公開前 gate は local deploy smoke に固定する。
+Mainnet preflight は deploy しない。`-e ic` の canister mapping、identity、cycles、canister status を確認する公開前 gate。
 
 ## Product Contract
 
@@ -31,7 +35,9 @@ Mainnet preflight は今回 scope 外。公開前 gate は local deploy smoke �
 | Hono examples | package smoke and canister smoke | green |
 | external fetch | direct HTTPS outcall and JS fetch canister path | green |
 | optional real APIs | OpenAI / Upstash with user secrets | non-blocking |
-| mainnet preflight | scope 外。local deploy smoke を正式 gate とする | not a gate |
+| public API contract | `docs/public-api-contract.md` and `scripts/check_api_contract.sh` | green |
+| compatibility matrix CI | `.github/workflows/ci.yml` and `scripts/check_compatibility_matrix.sh` | green |
+| mainnet preflight | `IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh` | required gate |
 | semver | crate/template package version `0.2.0`; v1 is product contract | documented |
 
 ## Wording Guard

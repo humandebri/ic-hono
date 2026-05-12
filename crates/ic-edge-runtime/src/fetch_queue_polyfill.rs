@@ -18,7 +18,11 @@ globalThis.fetch = (input, init = {}) => {
   if (init.headers) {
     for (const [name, value] of new Headers(init.headers)) headers.set(name, value)
   }
-  const body = init.body || (isRequest ? input.body : '')
+  const hasInitBody = Object.prototype.hasOwnProperty.call(init, 'body')
+  if ((method === 'GET' || method === 'HEAD') && hasInitBody && init.body !== null && init.body !== undefined) {
+    return Promise.reject(new TypeError('Request with GET/HEAD method cannot have body'))
+  }
+  const body = hasInitBody ? init.body : (isRequest ? consume_body(input) : '')
   const bodyValue = Array.from(body_bytes(body_from(body)))
   const id = globalThis.__ic_edge_fetch_next_id++
   globalThis.__ic_edge_fetch_requests.push({

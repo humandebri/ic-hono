@@ -12,10 +12,13 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 use std::rc::Rc;
 
+/// Synchronous host fetch implementation for host QuickJS tests and examples.
 pub trait HostFetch {
+    /// Performs an external fetch for a JavaScript `fetch()` request.
     fn fetch(&mut self, request: Request) -> Result<Response>;
 }
 
+/// Host QuickJS runtime for bundled Worker-compatible apps.
 pub struct QuickJsRuntime {
     _runtime: Runtime,
     context: Context,
@@ -23,6 +26,7 @@ pub struct QuickJsRuntime {
 }
 
 impl QuickJsRuntime {
+    /// Creates a runtime with Web API, Cache, crypto, and dispatch polyfills installed.
     pub fn new() -> Result<Self> {
         let runtime = Runtime::new().map_err(to_runtime_error)?;
         let context = Context::full(&runtime).map_err(to_runtime_error)?;
@@ -35,6 +39,7 @@ impl QuickJsRuntime {
         Ok(instance)
     }
 
+    /// Installs a custom Cache API persistence backend.
     pub fn install_cache<C>(&self, cache: C)
     where
         C: CacheHost + 'static,
@@ -42,6 +47,7 @@ impl QuickJsRuntime {
         *self.cache_host.borrow_mut() = Box::new(cache);
     }
 
+    /// Installs a host fetch callback for JavaScript `fetch()`.
     pub fn install_fetch<F>(&self, fetcher: F) -> Result<()>
     where
         F: HostFetch + 'static,
@@ -59,6 +65,7 @@ impl QuickJsRuntime {
             .map_err(to_runtime_error)
     }
 
+    /// Takes the last captured `console.error` text.
     pub fn take_console_error(&self) -> Result<Option<String>> {
         self.context
             .with(|ctx| ctx.globals().get("__ic_edge_console_error"))

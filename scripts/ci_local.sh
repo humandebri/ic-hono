@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 cargo fmt --all --check
 cargo test
+scripts/check_api_contract.sh
+scripts/check_compatibility_matrix.sh
 scripts/check_canister_interface.sh
 scripts/check_release_audit.sh
 scripts/package_smoke.sh

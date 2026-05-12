@@ -3,6 +3,31 @@
 
 pub const SOURCE: &str = r#"
 const __ic_edge_decode_query = (value) => decodeURIComponent(String(value).replace(/\+/g, ' '))
+const __ic_edge_parse_absolute_url = (value) => {
+  const match = String(value).match(/^([^:]+):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/)
+  if (!match) throw new TypeError('Invalid URL')
+  return {
+    protocol: `${match[1]}:`,
+    host: match[2],
+    pathname: match[3] || '/',
+    search: match[4] || '',
+    hash: match[5] || ''
+  }
+}
+const __ic_edge_url_origin = (url) => `${url.protocol}//${url.host}`
+const __ic_edge_resolve_url = (input, base) => {
+  const value = String(input)
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)) return value
+  const baseUrl = __ic_edge_parse_absolute_url(base || 'https://ic-edge.local/')
+  const origin = __ic_edge_url_origin(baseUrl)
+  if (value.startsWith('/')) return `${origin}${value}`
+  if (value.startsWith('?')) return `${origin}${baseUrl.pathname}${value}`
+  if (value.startsWith('#')) return `${origin}${baseUrl.pathname}${baseUrl.search}${value}`
+  const directory = baseUrl.pathname.endsWith('/')
+    ? baseUrl.pathname
+    : baseUrl.pathname.slice(0, baseUrl.pathname.lastIndexOf('/') + 1)
+  return `${origin}${directory}${value}`
+}
 
 class URLSearchParams {
   constructor(init = undefined) {
@@ -74,18 +99,13 @@ class URLSearchParams {
 
 class URL {
   constructor(input, base = undefined) {
-    const value = String(input)
-    const absolute = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(value)
-      ? value
-      : `${String(base || 'https://ic-edge.local').replace(/\/$/, '')}/${value.replace(/^\//, '')}`
-    const match = absolute.match(/^([^:]+):\/\/([^/?#]*)([^?#]*)(\?[^#]*)?(#.*)?$/)
-    if (!match) throw new TypeError('Invalid URL')
-    this.protocol = `${match[1]}:`
-    this.host = match[2]
-    this.hostname = match[2].split(':')[0]
-    this.pathname = match[3] || '/'
-    this.search = match[4] || ''
-    this.hash = match[5] || ''
+    const parsed = __ic_edge_parse_absolute_url(__ic_edge_resolve_url(input, base))
+    this.protocol = parsed.protocol
+    this.host = parsed.host
+    this.hostname = parsed.host.split(':')[0]
+    this.pathname = parsed.pathname
+    this.search = parsed.search
+    this.hash = parsed.hash
     this.searchParams = new URLSearchParams(this.search)
   }
   toString() {

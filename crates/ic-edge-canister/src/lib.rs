@@ -15,38 +15,59 @@ use serde::Deserialize;
 #[cfg(test)]
 mod tests;
 
+/// Runtime-neutral IC HTTP request shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IcHttpRequest {
+    /// HTTP method.
     pub method: String,
+    /// Request URL.
     pub url: String,
+    /// HTTP headers.
     pub headers: Vec<(String, String)>,
+    /// Body bytes.
     pub body: Vec<u8>,
 }
 
+/// CDK-compatible HTTP request DTO.
 #[derive(Debug, Clone, CandidType, Deserialize, PartialEq, Eq)]
 pub struct CdkHttpRequest {
+    /// HTTP method.
     pub method: String,
+    /// Request URL.
     pub url: String,
+    /// HTTP headers.
     pub headers: Vec<(String, String)>,
+    /// Body bytes.
     pub body: Vec<u8>,
+    /// Gateway certificate version.
     pub certificate_version: Option<u16>,
 }
 
+/// Runtime-neutral IC HTTP response shape.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IcHttpResponse {
+    /// HTTP status code.
     pub status_code: u16,
+    /// HTTP headers.
     pub headers: Vec<(String, String)>,
+    /// Body bytes.
     pub body: Vec<u8>,
 }
 
+/// CDK-compatible HTTP response DTO.
 #[derive(Debug, Clone, CandidType, PartialEq, Eq)]
 pub struct CdkHttpResponse {
+    /// HTTP status code.
     pub status_code: u16,
+    /// HTTP headers.
     pub headers: Vec<(String, String)>,
+    /// Body bytes.
     pub body: Vec<u8>,
+    /// Whether the gateway should replay the request as an update call.
     pub upgrade: Option<bool>,
 }
 
+/// Handles a runtime-neutral IC HTTP request.
 pub fn handle_http(
     runtime: &mut impl EdgeRuntime,
     request: IcHttpRequest,
@@ -64,6 +85,7 @@ pub fn handle_http(
     Ok(to_ic_response(js_response))
 }
 
+/// Handles a CDK-compatible HTTP request.
 pub fn handle_cdk_http(
     runtime: &mut impl EdgeRuntime,
     request: CdkHttpRequest,
@@ -72,6 +94,7 @@ pub fn handle_cdk_http(
     Ok(response.into())
 }
 
+/// Handles a runtime-neutral IC HTTP request with async runtime support.
 pub async fn handle_http_async(
     runtime: &mut impl AsyncEdgeRuntime,
     request: IcHttpRequest,
@@ -89,6 +112,7 @@ pub async fn handle_http_async(
     Ok(to_ic_response(js_response))
 }
 
+/// Handles a CDK-compatible HTTP request with async runtime support.
 pub async fn handle_cdk_http_async(
     runtime: &mut impl AsyncEdgeRuntime,
     request: CdkHttpRequest,
@@ -97,6 +121,7 @@ pub async fn handle_cdk_http_async(
     Ok(response.into())
 }
 
+/// Performs an HTTPS outcall for a runtime `Request`.
 pub async fn https_outcall_fetch(
     request: Request,
     transform_name: &str,
@@ -109,6 +134,7 @@ pub async fn https_outcall_fetch(
     from_outcall_response(response)
 }
 
+/// Builds management canister HTTPS outcall arguments.
 pub fn build_https_outcall_args(
     request: Request,
     transform_name: &str,
@@ -143,6 +169,7 @@ pub fn build_https_outcall_args(
     })
 }
 
+/// Transform function that strips all HTTPS outcall response headers.
 pub fn transform_strip_headers(args: TransformArgs) -> HttpRequestResult {
     HttpRequestResult {
         status: args.response.status,

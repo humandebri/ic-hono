@@ -30,5 +30,14 @@ for (const item of audit.optional) {
 if (!audit.success_command || !audit.success_command.includes("scripts/icp_local_smoke.sh")) {
   throw new Error("release audit must name the final smoke command")
 }
+if (!audit.success_command.includes("scripts/mainnet_preflight.sh")) {
+  throw new Error("release audit must name the mainnet preflight gate")
+}
+if (!audit.success_command.includes("scripts/check_compatibility_matrix.sh")) {
+  throw new Error("release audit must name the compatibility matrix gate")
+}
+if (!audit.success_command.includes("scripts/package_crates.sh")) {
+  throw new Error("release audit must name the crate package gate")
+}
 console.log(`${audit.verified.length} verified, release audit complete`)
 '
