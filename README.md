@@ -103,7 +103,7 @@ Mainnet preflight is not part of the v1 preview gate. Local deploy smoke is the 
 - [Security Model](docs/security-model.md)
 - [Release Checklist](docs/release-checklist.md)
 
-See [Docs Index](docs/README.md) for runtime model, HTTPS outcalls, positioning, release evidence, and archived planning notes.
+See [Docs Index](docs/README.md) for runtime model, HTTPS outcalls, positioning, release evidence, and examples.
 
 ## Contributing
 

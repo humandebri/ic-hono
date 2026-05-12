@@ -35,10 +35,6 @@ Durable Edge Runtime on ICP v1 preview の文書索引。現行仕様はこの�
 - [Hono with Zod](../examples/hono-zod/README.md): JSON validation。
 - [Canister Template](../examples/canister-template/README.md): upload、env、runtime info、rollback。
 
-## Archive
-
-- [Durable Edge Runtime on ICP Plan](archive/durable-edge-runtime-on-icp.md): 初期計画と設計背景。現行仕様ではなく参照用。
-
 ## Maintenance
 
 - API surface 変更時は [Runtime API](runtime-api.md)、[Compatibility Matrix](compatibility.md)、[Limitations](limitations.md) を同時更新する。
