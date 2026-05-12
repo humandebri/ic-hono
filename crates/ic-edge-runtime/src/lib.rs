@@ -302,14 +302,20 @@ mod tests {
                       signature,
                       encoder.encode('abc')
                     )
-                    return Response.json({ digest, verified })
+                    const tampered = await crypto.subtle.verify(
+                      'HMAC',
+                      key,
+                      new Uint8Array(signature).fill(0),
+                      encoder.encode('abc')
+                    )
+                    return Response.json({ digest, verified, tampered })
                 } }",
             )
             .unwrap();
         let res = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
         assert_eq!(
             res.body.text().unwrap(),
-            r#"{"digest":[186,120,22,191,143,1,207,234,65,65,64,222,93,174,34,35,176,3,97,163,150,23,122,156,180,16,255,97,242,0,21,173],"verified":true}"#
+            r#"{"digest":[186,120,22,191,143,1,207,234,65,65,64,222,93,174,34,35,176,3,97,163,150,23,122,156,180,16,255,97,242,0,21,173],"verified":true,"tampered":false}"#
         );
     }
 }

@@ -8,9 +8,9 @@ User bundle は canister 内 QuickJS context で実行する。browser DOM、nat
 
 `upload_bundle(module, bytes)` は controller 限定。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。
 
-`set_env(name, value)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
+`set_env(name, value)` と direct smoke 用 `fetch_outcall(url)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
 
-2026-05-10 の `scripts/icp_local_smoke.sh` では fresh deploy 後に `set_env("IC_EDGE_SMOKE", "ok")` が `Ok` を返し、後続 `env_names()` で `IC_EDGE_SMOKE` を確認済み。
+`scripts/icp_local_smoke.sh` は fresh deploy 後に `set_env("IC_EDGE_SMOKE", "ok")` が `Ok` を返し、後続 `env_names()` で `IC_EDGE_SMOKE` を確認する。
 
 ## Secrets
 

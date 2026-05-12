@@ -46,7 +46,11 @@
     },
     {
       "requirement": "release docs",
-      "evidence": "README.md, docs/runtime-api.md, docs/compatibility.md, docs/security-model.md, docs/limitations.md, docs/release-checklist.md"
+      "evidence": "README.md, docs/README.md, docs/runtime-api.md, docs/compatibility.md, docs/security-model.md, docs/limitations.md, docs/release-checklist.md"
+    },
+    {
+      "requirement": "OSS metadata",
+      "evidence": "MIT LICENSE, CONTRIBUTING.md, SECURITY.md"
     },
     {
       "requirement": "v1 preview semver policy",

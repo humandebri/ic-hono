@@ -44,7 +44,7 @@ fn crypto_digest(algorithm: String, data_json: String) -> rquickjs::Result<Strin
         return Err(unsupported_crypto("digest", &algorithm));
     }
     let data = json_to_bytes(&data_json)?;
-    bytes_to_json(&Sha256::digest(data).to_vec())
+    bytes_to_json(&Sha256::digest(data))
 }
 
 fn crypto_sign(algorithm: String, key_json: String, data_json: String) -> rquickjs::Result<String> {
@@ -66,8 +66,17 @@ fn crypto_verify(
     signature_json: String,
     data_json: String,
 ) -> rquickjs::Result<bool> {
-    let expected = crypto_sign(algorithm, key_json, data_json)?;
-    Ok(expected == signature_json)
+    if !algorithm.eq_ignore_ascii_case("HMAC") {
+        return Err(unsupported_crypto("verify", &algorithm));
+    }
+    let key = json_to_bytes(&key_json)?;
+    let signature = json_to_bytes(&signature_json)?;
+    let data = json_to_bytes(&data_json)?;
+    let mut mac = HmacSha256::new_from_slice(&key).map_err(|error| {
+        rquickjs::Error::new_from_js_message("CryptoKey", "HMAC", error.to_string())
+    })?;
+    mac.update(&data);
+    Ok(mac.verify_slice(&signature).is_ok())
 }
 
 fn unsupported_crypto(operation: &'static str, algorithm: &str) -> rquickjs::Error {

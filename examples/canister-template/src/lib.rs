@@ -110,7 +110,7 @@ fn set_env(name: String, value: String) -> Result<(), String> {
 }
 #[ic_cdk::query]
 fn env_names() -> Vec<String> {
-    STORE.with_borrow(|store| read_env_names(store))
+    STORE.with_borrow(read_env_names)
 }
 #[ic_cdk::query]
 fn bundle_size(module: String) -> Option<u64> {
@@ -140,6 +140,9 @@ fn transform_strip_headers(args: TransformArgs) -> HttpRequestResult {
 }
 #[ic_cdk::update]
 async fn fetch_outcall(url: String) -> CdkHttpResponse {
+    if let Err(error) = ensure_controller() {
+        return forbidden_response(&error);
+    }
     let mut headers = Headers::new();
     if let Err(error) = headers.set("user-agent", "ic-edge-runtime".to_string()) {
         return error_response(error);
@@ -208,6 +211,15 @@ fn error_response(error: ic_edge_web::Error) -> CdkHttpResponse {
         status_code: 500,
         headers: vec![("content-type".to_string(), "text/plain".to_string())],
         body: format!("{error:?}").into_bytes(),
+        upgrade: None,
+    }
+}
+
+fn forbidden_response(message: &str) -> CdkHttpResponse {
+    CdkHttpResponse {
+        status_code: 403,
+        headers: vec![("content-type".to_string(), "text/plain".to_string())],
+        body: message.as_bytes().to_vec(),
         upgrade: None,
     }
 }

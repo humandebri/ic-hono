@@ -11,9 +11,9 @@ IC HTTP endpoint と bundle upload 入口の最小形。
 - `set_env(name, value)`
 - `env_names()`
 - `transform_strip_headers(args)`
-- `fetch_outcall(url)`
+- `fetch_outcall(url)` controller-only direct HTTPS outcall smoke helper
 
-`upload_bundle` と `set_env` は controller 限定。`env_names` は secret 値を返さない。
+`upload_bundle`、`set_env`、`fetch_outcall` は controller 限定。`env_names` は secret 値を返さない。
 
 ```bash
 icp network start -d

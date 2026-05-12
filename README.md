@@ -4,7 +4,28 @@ Run Hono and Worker-compatible Fetch/Core packages inside ICP canisters.
 
 This is a **v1 preview** runtime contract. The crate semver is `0.2.0`; the `v1` label describes the supported API/product contract, not a `1.0.0` stability claim.
 
-This repository builds a QuickJS-based, Web Standards, canister-native durable runtime. It is a runtime kernel, not a managed app platform.
+This repository builds an open-source QuickJS-based, Web Standards, canister-native durable runtime for the Internet Computer. It is a runtime kernel, not a managed app platform.
+
+## What This Is
+
+`ic-hono` runs bundled Hono applications inside ICP canisters through a Worker-compatible Fetch/Core API subset.
+
+Supported in v1 preview:
+
+- Hono `app.fetch()` request handling
+- `Request` / `Response` / `Headers` / `URL` / `URLSearchParams`
+- `fetch()` through ICP HTTPS outcalls
+- `crypto.getRandomValues` and SHA-256 / HMAC-SHA-256 `crypto.subtle` subset
+- canister-local stable Cache API subset
+- stable bundle/env storage and runtime rollback
+
+Not supported in v1 preview:
+
+- Full Cloudflare Workers compatibility
+- Streams (`ReadableStream`, `WritableStream`, `TransformStream`)
+- DOM APIs
+- Node.js core modules and native addons
+- managed platform bindings
 
 ## Components
 
@@ -16,6 +37,13 @@ This repository builds a QuickJS-based, Web Standards, canister-native durable r
 - `examples/*`: Hono and package compatibility examples
 
 ## Quickstart
+
+Prerequisites:
+
+- Rust toolchain with `wasm32-wasip1`
+- `icp` CLI
+- `wasi2ic`
+- Node.js / npm for example bundle builds
 
 ```bash
 cargo test
@@ -54,8 +82,20 @@ Cache API is canister-local stable storage, not a CDN cache. It supports `caches
 
 Runtime limits are fixed: bundle 2 MiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
 
+## Release Gates
+
+Before publishing changes, run:
+
+```bash
+scripts/ci_local.sh
+scripts/icp_local_smoke.sh
+```
+
+Mainnet preflight is not part of the v1 preview gate. Local deploy smoke is the required release gate.
+
 ## Docs
 
+- [Docs Index](docs/README.md)
 - [Quickstart](docs/quickstart.md)
 - [Runtime API](docs/runtime-api.md)
 - [Compatibility Matrix](docs/compatibility.md)
@@ -65,3 +105,15 @@ Runtime limits are fixed: bundle 2 MiB, inbound body 1 MiB, JS response body 1 M
 - [HTTPS Outcalls Model](docs/https-outcalls-model.md)
 - [Juno Positioning](docs/juno-positioning.md)
 - [Release Checklist](docs/release-checklist.md)
+
+## Contributing
+
+Issues and pull requests are welcome. Keep changes small, documented, and covered by focused tests. See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+Do not file public issues for vulnerabilities. See [SECURITY.md](SECURITY.md).
+
+## License
+
+Licensed under the MIT license. See [LICENSE](LICENSE).

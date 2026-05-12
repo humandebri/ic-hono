@@ -134,7 +134,7 @@ ic-edge upload dist/app.bundle.js --module app --canister edge --environment loc
 
 `--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `icp canister call <canister> upload_bundle --args-file ...` を実行する。
 
-canister template 側は `upload_bundle(module, bytes)`、`bundle_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)` を公開する。mutation API は controller 限定。
+canister template 側は `upload_bundle(module, bytes)`、`bundle_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。mutation API と `fetch_outcall(url)` は controller 限定。
 `runtime_info()` は runtime backend 名と cache invalidation 用 generation を返す。generation は `upload_bundle` と `set_env` 成功時に増加し、canister upgrade では維持される。
 
 `quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`upload_bundle()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。

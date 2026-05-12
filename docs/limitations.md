@@ -33,11 +33,11 @@ v1 preview Worker互換 Core+Cache runtime の制約。crate semver は `0.2.0`�
 - `http_request` / `http_request_update` の CDK endpoint 関数は template 実装済み。
 - CDK 形状の request/response DTO と変換関数は実装済み。
 - `examples/canister-template` は bundle upload 入口付きで wasm build 済み。`icp.yaml` は backend build script で release wasm を build し、Candid metadata を埋め込む。
-- 2026-05-10 の検証では、`scripts/icp_local_smoke.sh` が fresh `icp build edge`、`icp deploy edge --yes`、bundle upload、direct update、IC Gateway、JS `fetch()` HTTPS outcall、zod direct update まで通過。
+- `scripts/icp_local_smoke.sh` は fresh `icp build edge`、`icp deploy edge --yes`、bundle upload、direct update、IC Gateway、JS `fetch()` HTTPS outcall、stable Cache、rollback、zod direct update を検証する。
 - 実 OpenAI / Upstash smoke は API key / REST token が必要なため任意確認。外部 fetch 経路自体は `example.com` と Hono fetch example で canister smoke 済み。
 - HTTPS outcalls adapter と transform は実装済み。
 - JS `fetch()` から Rust `HostFetch` への mock bridge は host smoke 済み。
-- `fetch_outcall(url)` update endpoint は HTTPS outcalls adapter に接続済み。
+- `fetch_outcall(url)` update endpoint は controller-only smoke helper として HTTPS outcalls adapter に接続済み。
 - canister 内 JS `fetch()` から HTTPS outcalls adapter への実配線は `http_request_update` の async 経路で実装済み。
 - stable memory-backed store は `ic-stable-structures` 実装済み。
 - local memory store、stable memory store、`ic-edge upload`、canister `upload_bundle` 入口、`icp canister call` upload 経路は実装済み。

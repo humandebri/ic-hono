@@ -3,7 +3,7 @@
 ## Scope
 
 HTTPS outcall は JS external `fetch()` 専用。Inbound HTTP request 処理には使わない。
-Hono を ICP 上で受ける v0.1 中核には不要。外部 API を canister から呼ぶ場合だけ使う。
+Hono を ICP 上で受ける inbound path には不要。外部 API を canister から呼ぶ場合だけ使う。
 
 ## Flow
 
@@ -31,7 +31,7 @@ JS fetch("https://...")
 
 Host smoke は JS `fetch()` -> Rust `HostFetch` mock bridge を検証済み。
 
-2026-05-10 の fresh local canister smoke では `fetch_outcall("https://example.com/")` が status 200 を返した。これは `ic_edge_canister::https_outcall_fetch`、management canister `http_request`、`transform_strip_headers` の実 canister evidence。
+`scripts/icp_local_smoke.sh` は controller identity から `fetch_outcall("https://example.com/")` を呼び、status 200 を確認する。これは `ic_edge_canister::https_outcall_fetch`、management canister `http_request`、`transform_strip_headers` の実 canister evidence。
 
 同じ smoke で Hono fetch example も direct update 経路を通過した。JS `fetch()` -> runtime queue -> HTTPS outcall -> Promise resume の end-to-end evidence は取得済み。
 

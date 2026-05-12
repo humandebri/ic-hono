@@ -22,11 +22,11 @@ fn main() {
         .filter_map(|arg| arg.split_once(':'))
         .map(|(name, value)| (name.trim().to_string(), value.trim().to_string()))
         .collect();
-    let source = fs::read_to_string(&bundle_path).expect("failed to read bundle");
+    let source = fs::read_to_string(bundle_path).expect("failed to read bundle");
 
     let mut runtime = QuickJsRuntime::new().expect("failed to create runtime");
     runtime
-        .eval_module(&bundle_path, &source)
+        .eval_module(bundle_path, &source)
         .expect("failed to evaluate bundle");
 
     let response = runtime

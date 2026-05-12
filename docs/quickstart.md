@@ -17,6 +17,7 @@ scripts/package_smoke.sh
 - JSON echo
 - params/query
 - CORS header
+- Cache API subset
 - zod validation
 - JS `fetch()` host bridge
 - OpenAI / Upstash mock bridge
@@ -57,7 +58,7 @@ UPSTASH_REDIS_REST_TOKEN=... \
 scripts/icp_local_smoke.sh
 ```
 
-2026-05-10 現在、`scripts/icp_local_smoke.sh` は local canister、IC Gateway、直接 HTTPS outcall、JS `fetch()` through HTTPS outcall で通過済み。
+`scripts/icp_local_smoke.sh` は local canister、IC Gateway、直接 HTTPS outcall、JS `fetch()` through HTTPS outcall、stable Cache、rollback を確認する。
 実 OpenAI / Upstash smoke は API key / REST token が必要なため任意確認。
 
 ## New App

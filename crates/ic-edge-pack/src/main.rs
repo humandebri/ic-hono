@@ -233,19 +233,18 @@ fn validate_bundle_contract(bundle_path: &str) -> Result<(), String> {
 }
 
 fn parse_out_file(args: &[String]) -> Result<Option<PathBuf>, String> {
-    let index = 1;
-    while index < args.len() {
-        match args[index].as_str() {
-            "--out" => {
-                let value = args
-                    .get(index + 1)
-                    .ok_or_else(|| "missing --out value".to_string())?;
-                return Ok(Some(PathBuf::from(value)));
-            }
-            value => return Err(format!("unknown argument: {value}")),
+    let Some(arg) = args.get(1) else {
+        return Ok(None);
+    };
+    match arg.as_str() {
+        "--out" => {
+            let value = args
+                .get(2)
+                .ok_or_else(|| "missing --out value".to_string())?;
+            Ok(Some(PathBuf::from(value)))
         }
+        value => Err(format!("unknown argument: {value}")),
     }
-    Ok(None)
 }
 
 fn parse_module(args: &[String]) -> Result<Option<String>, String> {
