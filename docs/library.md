@@ -1,6 +1,6 @@
 # Library Guide
 
-`ic-hono` は v1 preview の Rust library workspace。crate semver は `0.2.0`。
+`ic-edge-workers` は v1 preview の Rust library workspace。crate semver は `0.2.0`。
 
 ## Crates
 
@@ -73,6 +73,7 @@ cargo build --target wasm32-wasip1 -p ic-edge-canister-template --release --feat
 - Required target: `wasm32-wasip1`.
 - Node.js 20+ for example bundle builds.
 - `wasi2ic`, `ic-wasm`, and `wabt`/`wasm-objdump` for canister build audits.
+- `quickjs-wasm-sys` fetches a WASI SDK on first build unless `QUICKJS_WASM_SYS_WASI_SDK_PATH` points at a local SDK. Pin that path in offline or hermetic CI.
 
 ## Publish Check
 

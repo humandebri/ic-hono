@@ -30,6 +30,8 @@ use runtime_cache::{store_runtime, take_runtime};
 use std::cell::RefCell;
 
 const GENERATION_KEY: &str = "__runtime_generation";
+const UPLOAD_BYTES_PREFIX: &str = "__upload_bytes:";
+const UPLOAD_TOTAL_PREFIX: &str = "__upload_total:";
 
 thread_local! {
     static STORE: RefCell<StableEdgeStore> = RefCell::new(StableEdgeStore::new());
@@ -66,16 +68,35 @@ async fn http_request_update(request: CdkHttpRequest) -> CdkHttpResponse {
 #[ic_cdk::update]
 fn upload_bundle(module: String, bytes: Vec<u8>) -> Result<(), String> {
     ensure_controller()?;
-    if bytes.len() > limits::MAX_BUNDLE_BYTES {
-        return Err("bundle exceeds v1 limit".to_string());
-    }
-    STORE.with_borrow_mut(|store| {
-        store
-            .put_module(&module, &bytes)
-            .map_err(|error| format!("{error:?}"))?;
-        let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
-        history_support::record_snapshot(store, generation)
-    })
+    STORE.with_borrow_mut(|store| upload_bundle_in_store(store, &module, &bytes))
+}
+
+#[ic_cdk::update]
+fn begin_bundle_upload(module: String, total_bytes: u64) -> Result<(), String> {
+    ensure_controller()?;
+    let total_bytes = usize::try_from(total_bytes)
+        .map_err(|_| "bundle size does not fit this canister".to_string())?;
+    STORE.with_borrow_mut(|store| begin_bundle_upload_in_store(store, &module, total_bytes))
+}
+
+#[ic_cdk::update]
+fn append_bundle_chunk(module: String, offset: u64, bytes: Vec<u8>) -> Result<(), String> {
+    ensure_controller()?;
+    let offset = usize::try_from(offset)
+        .map_err(|_| "chunk offset does not fit this canister".to_string())?;
+    STORE.with_borrow_mut(|store| append_bundle_chunk_in_store(store, &module, offset, &bytes))
+}
+
+#[ic_cdk::update]
+fn commit_bundle_upload(module: String) -> Result<(), String> {
+    ensure_controller()?;
+    STORE.with_borrow_mut(|store| commit_bundle_upload_in_store(store, &module))
+}
+
+#[ic_cdk::update]
+fn abort_bundle_upload(module: String) -> Result<(), String> {
+    ensure_controller()?;
+    STORE.with_borrow_mut(|store| abort_bundle_upload_in_store(store, &module))
 }
 
 #[ic_cdk::update]
@@ -277,6 +298,111 @@ fn bump_generation(store: &mut StableEdgeStore) -> ic_edge_store::Result<u64> {
     let next = read_generation(store).saturating_add(1);
     store.put_kv(GENERATION_KEY, next.to_string().as_bytes())?;
     Ok(next)
+}
+
+fn upload_bundle_in_store(
+    store: &mut StableEdgeStore,
+    module: &str,
+    bytes: &[u8],
+) -> Result<(), String> {
+    if bytes.len() > limits::MAX_BUNDLE_BYTES {
+        return Err("bundle exceeds v1 limit".to_string());
+    }
+    store
+        .put_module(module, bytes)
+        .map_err(|error| format!("{error:?}"))?;
+    abort_bundle_upload_in_store(store, module)?;
+    let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
+    history_support::record_snapshot(store, generation)
+}
+
+fn begin_bundle_upload_in_store(
+    store: &mut StableEdgeStore,
+    module: &str,
+    total_bytes: usize,
+) -> Result<(), String> {
+    if total_bytes > limits::MAX_BUNDLE_BYTES {
+        return Err("bundle exceeds v1 limit".to_string());
+    }
+    store
+        .put_kv(&upload_bytes_key(module), &[])
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .put_kv(
+            &upload_total_key(module),
+            total_bytes.to_string().as_bytes(),
+        )
+        .map_err(|error| format!("{error:?}"))
+}
+
+fn append_bundle_chunk_in_store(
+    store: &mut StableEdgeStore,
+    module: &str,
+    offset: usize,
+    bytes: &[u8],
+) -> Result<(), String> {
+    if bytes.len() > limits::MAX_BUNDLE_UPLOAD_CHUNK_BYTES {
+        return Err("bundle chunk exceeds v1 limit".to_string());
+    }
+    let total = read_upload_total(store, module)?;
+    let mut staged = read_upload_bytes(store, module)?;
+    if offset != staged.len() {
+        return Err("bundle chunk offset mismatch".to_string());
+    }
+    if staged.len().saturating_add(bytes.len()) > total {
+        return Err("bundle upload exceeds declared size".to_string());
+    }
+    staged.extend_from_slice(bytes);
+    store
+        .put_kv(&upload_bytes_key(module), &staged)
+        .map_err(|error| format!("{error:?}"))
+}
+
+fn commit_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
+    let total = read_upload_total(store, module)?;
+    let staged = read_upload_bytes(store, module)?;
+    if staged.len() != total {
+        return Err("bundle upload is incomplete".to_string());
+    }
+    store
+        .put_module(module, &staged)
+        .map_err(|error| format!("{error:?}"))?;
+    abort_bundle_upload_in_store(store, module)?;
+    let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
+    history_support::record_snapshot(store, generation)
+}
+
+fn abort_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
+    store
+        .delete_kv(&upload_bytes_key(module))
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .delete_kv(&upload_total_key(module))
+        .map_err(|error| format!("{error:?}"))
+}
+
+fn read_upload_total(store: &StableEdgeStore, module: &str) -> Result<usize, String> {
+    let bytes = store
+        .get_kv(&upload_total_key(module))
+        .map_err(|error| format!("{error:?}"))?
+        .ok_or_else(|| "bundle upload has not started".to_string())?;
+    let value = String::from_utf8(bytes).map_err(|error| error.to_string())?;
+    value.parse::<usize>().map_err(|error| error.to_string())
+}
+
+fn read_upload_bytes(store: &StableEdgeStore, module: &str) -> Result<Vec<u8>, String> {
+    store
+        .get_kv(&upload_bytes_key(module))
+        .map_err(|error| format!("{error:?}"))?
+        .ok_or_else(|| "bundle upload has not started".to_string())
+}
+
+fn upload_bytes_key(module: &str) -> String {
+    format!("{UPLOAD_BYTES_PREFIX}{}:{module}", module.len())
+}
+
+fn upload_total_key(module: &str) -> String {
+    format!("{UPLOAD_TOTAL_PREFIX}{}:{module}", module.len())
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]

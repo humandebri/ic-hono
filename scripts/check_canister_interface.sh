@@ -32,6 +32,10 @@ for method in \
   http_request \
   http_request_update \
   upload_bundle \
+  begin_bundle_upload \
+  append_bundle_chunk \
+  commit_bundle_upload \
+  abort_bundle_upload \
   set_env \
   env_names \
   bundle_size \

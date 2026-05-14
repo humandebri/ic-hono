@@ -155,29 +155,145 @@ fn upload_to_canister(
     module: &str,
     bytes: &[u8],
 ) -> Result<(), String> {
-    let argument_path = env::temp_dir().join("ic-edge-upload.did");
-    fs::write(&argument_path, candid_upload_argument(module, bytes))
-        .map_err(|error| error.to_string())?;
+    call_canister(
+        canister,
+        environment.as_deref(),
+        "begin_bundle_upload",
+        &candid_begin_upload_argument(module, bytes.len())?,
+    )?;
+    let mut offset = 0usize;
+    while offset < bytes.len() {
+        let end = offset
+            .saturating_add(limits::MAX_BUNDLE_UPLOAD_CHUNK_BYTES)
+            .min(bytes.len());
+        call_canister(
+            canister,
+            environment.as_deref(),
+            "append_bundle_chunk",
+            &candid_append_chunk_argument(module, offset, &bytes[offset..end])?,
+        )
+        .map_err(|error| {
+            let _ = call_canister(
+                canister,
+                environment.as_deref(),
+                "abort_bundle_upload",
+                &candid_module_argument(module),
+            );
+            error
+        })?;
+        offset = end;
+    }
+    call_canister(
+        canister,
+        environment.as_deref(),
+        "commit_bundle_upload",
+        &candid_module_argument(module),
+    )
+    .map_err(|error| abort_after_upload_error(canister, environment.as_deref(), module, error))
+}
+
+fn abort_after_upload_error(
+    canister: &str,
+    environment: Option<&str>,
+    module: &str,
+    error: String,
+) -> String {
+    let _ = call_canister(
+        canister,
+        environment,
+        "abort_bundle_upload",
+        &candid_module_argument(module),
+    );
+    error
+}
+
+fn call_canister(
+    canister: &str,
+    environment: Option<&str>,
+    method: &str,
+    argument: &str,
+) -> Result<(), String> {
+    let argument_path = env::temp_dir().join(format!("ic-edge-{method}.did"));
+    fs::write(&argument_path, argument).map_err(|error| error.to_string())?;
     let mut command = Command::new("icp");
-    command.args(["canister", "call", canister, "upload_bundle", "--args-file"]);
+    command.args(["canister", "call", canister, method, "--args-file"]);
     command.arg(&argument_path);
     if let Some(environment) = environment {
-        command.args(["--environment", &environment]);
+        command.args(["--environment", environment]);
     }
     let output = command.output().map_err(|error| error.to_string())?;
     if output.status.success() {
-        Ok(())
+        parse_canister_call_result(&output.stdout, &output.stderr)
     } else {
-        Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
+        Err(command_output_error(&output.stdout, &output.stderr))
     }
 }
 
+fn parse_canister_call_result(stdout: &[u8], stderr: &[u8]) -> Result<(), String> {
+    let stdout = String::from_utf8_lossy(stdout);
+    if stdout.contains("variant { Err") {
+        return Err(extract_candid_err(&stdout).unwrap_or_else(|| stdout.trim().to_string()));
+    }
+    if stdout.contains("variant { Ok") {
+        return Ok(());
+    }
+    Err(command_output_error(stdout.as_bytes(), stderr))
+}
+
+fn extract_candid_err(stdout: &str) -> Option<String> {
+    let start = stdout.find("Err")?;
+    let after_err = &stdout[start..];
+    let quote_start = after_err.find('"')?;
+    let quoted = &after_err[quote_start + 1..];
+    let quote_end = quoted.find('"')?;
+    Some(quoted[..quote_end].to_string())
+}
+
+fn command_output_error(stdout: &[u8], stderr: &[u8]) -> String {
+    let stderr = String::from_utf8_lossy(stderr).trim().to_string();
+    if !stderr.is_empty() {
+        return stderr;
+    }
+    let stdout = String::from_utf8_lossy(stdout).trim().to_string();
+    if !stdout.is_empty() {
+        return stdout;
+    }
+    "empty icp canister call response".to_string()
+}
+
+fn candid_begin_upload_argument(module: &str, total_bytes: usize) -> Result<String, String> {
+    let total =
+        u64::try_from(total_bytes).map_err(|_| "bundle length does not fit nat64".to_string())?;
+    Ok(format!("({module:?}, {total} : nat64)"))
+}
+
+fn candid_append_chunk_argument(
+    module: &str,
+    offset: usize,
+    bytes: &[u8],
+) -> Result<String, String> {
+    let offset = u64::try_from(offset).map_err(|_| "offset does not fit nat64".to_string())?;
+    Ok(format!(
+        "({module:?}, {offset} : nat64, {})",
+        candid_blob(bytes)
+    ))
+}
+
+fn candid_module_argument(module: &str) -> String {
+    format!("({module:?})")
+}
+
+#[cfg(test)]
 fn candid_upload_argument(module: &str, bytes: &[u8]) -> String {
+    format!("({module:?}, {})", candid_blob(bytes))
+}
+
+fn candid_blob(bytes: &[u8]) -> String {
     let escaped = bytes
         .iter()
         .map(|byte| format!("\\{byte:02x}"))
         .collect::<String>();
-    format!("({module:?}, blob \"{escaped}\")")
+    format!("blob \"{escaped}\"")
 }
 
 fn run_esbuild(entrypoint: &str, bundle_path: &str) -> Result<(), String> {
@@ -191,6 +307,7 @@ fn run_esbuild(entrypoint: &str, bundle_path: &str) -> Result<(), String> {
             "--platform=neutral",
             "--conditions=browser,worker,import",
             "--target=es2018",
+            "--minify",
             &format!("--outfile={bundle_path}"),
         ])
         .output()

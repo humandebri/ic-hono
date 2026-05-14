@@ -12,3 +12,5 @@ cd ../..
 cargo run -p ic-edge-runtime --example eval_bundle -- \
   examples/hono-jose/dist/app.bundle.js GET /jwt --show-response
 ```
+
+この repo example の `npm run build` は workspace の `cargo run -q -p ic-edge-pack --bin ic-edge -- pack ...` を呼ぶ。生成 app の `npm run build` は installed `ic-edge` を使う。

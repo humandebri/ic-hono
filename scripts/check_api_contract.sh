@@ -44,6 +44,10 @@ for item in \
   "ic-edge init hono" \
   "ic-edge pack" \
   "ic-edge upload" \
+  begin_bundle_upload \
+  append_bundle_chunk \
+  commit_bundle_upload \
+  abort_bundle_upload \
   runtime_history \
   rollback_runtime \
   Streams \

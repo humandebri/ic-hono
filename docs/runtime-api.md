@@ -33,15 +33,10 @@ canister build は `quickjs-ic` feature のみを使う。`wasm32-wasip1` build�
 v0.1 は ESM loader ではなく IIFE bundle を使う。`ic-edge pack` は local `esbuild` を実行し、この形を生成する。
 
 ```bash
-esbuild src/app.ts \
-  --bundle \
-  --format=iife \
-  --global-name=__ic_edge_bundle \
-  --platform=neutral \
-  --conditions=browser,worker,import \
-  --outfile=dist/app.bundle.js
+ic-edge pack src/app.ts --out dist/app.bundle.js
 ```
 
+CLI は esbuild を `--bundle --format=iife --global-name=__ic_edge_bundle --platform=neutral --conditions=browser,worker,import --target=es2018 --minify` で実行する。
 CLI は出力 bundle を QuickJS runtime で eval し、`globalThis.__ic_edge_bundle.default.fetch` が function であることを検査する。runtime は eval 後に次の値を app として扱う。
 
 ```ts
@@ -134,12 +129,13 @@ ic-edge upload dist/app.bundle.js --module app
 ic-edge upload dist/app.bundle.js --module app --canister edge --environment local
 ```
 
-`--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `icp canister call <canister> upload_bundle --args-file ...` を実行する。
+`--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `begin_bundle_upload`、`append_bundle_chunk`、`commit_bundle_upload` を使う。chunk size は 512 KiB。失敗時は `abort_bundle_upload` を試行する。
 
-canister template 側は `upload_bundle(module, bytes)`、`bundle_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。mutation API と `fetch_outcall(url)` は controller 限定。
-`runtime_info()` は runtime backend 名と cache invalidation 用 generation を返す。generation は `upload_bundle` と `set_env` 成功時に増加し、canister upgrade では維持される。
+canister template 側は small/direct/debug 互換用 `upload_bundle(module, bytes)`、chunk upload 用 `begin_bundle_upload(module, total_bytes)` / `append_bundle_chunk(module, offset, bytes)` / `commit_bundle_upload(module)` / `abort_bundle_upload(module)`、`bundle_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。CLI 標準経路は chunk upload。mutation API と `fetch_outcall(url)` は controller 限定。
+通信断などで staging KV が残っても runtime module には反映しない。次回同一 module の `begin_bundle_upload` または direct `upload_bundle` が既存 staging を破棄する。staging 一覧と掃除 API は v1 preview 対象外。
+`runtime_info()` は runtime backend 名と cache invalidation 用 generation を返す。generation は `upload_bundle`、`commit_bundle_upload`、`set_env` 成功時に増加し、canister upgrade では維持される。
 
-`quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`upload_bundle()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。
+`quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`upload_bundle()`、`commit_bundle_upload()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。
 
 `rollback_runtime(generation)` は直近 5 世代の bundle/env snapshot から復元し、復元後に新しい generation を発行する。
 

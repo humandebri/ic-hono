@@ -8,13 +8,17 @@ Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 - `http_request`
 - `http_request_update`
 - `upload_bundle(module, bytes)`
+- `begin_bundle_upload(module, total_bytes)`
+- `append_bundle_chunk(module, offset, bytes)`
+- `commit_bundle_upload(module)`
+- `abort_bundle_upload(module)`
 - `bundle_size(module)`
 - `set_env(name, value)`
 - `env_names()`
 - `transform_strip_headers(args)`
 - `fetch_outcall(url)` controller-only direct HTTPS outcall smoke helper
 
-`upload_bundle`、`set_env`、`fetch_outcall` は controller 限定。`env_names` は secret 値を返さない。
+`upload_bundle` は small/direct/debug 互換 API。CLI 標準経路は chunk upload。`upload_bundle`、chunk upload、`set_env`、`fetch_outcall` は controller 限定。`env_names` は secret 値を返さない。
 
 ```bash
 icp network start -d

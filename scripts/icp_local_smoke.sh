@@ -67,6 +67,7 @@ upload_example() {
 pack_example() {
   local entry="$1"
   local out="$2"
+  echo "packing minified bundle: $entry -> $out"
   cargo run -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
 }
 

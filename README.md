@@ -8,7 +8,7 @@ This repository builds an open-source QuickJS-based, Web Standards, canister-nat
 
 ## What This Is
 
-`ic-hono` runs bundled Hono applications inside ICP canisters through a Worker-compatible Fetch/Core API subset.
+`ic-edge-workers` runs bundled Hono applications inside ICP canisters through a Worker-compatible Fetch/Core API subset.
 
 Supported in v1 preview:
 
@@ -68,6 +68,7 @@ Prerequisites:
 - `icp` CLI
 - `wasi2ic`
 - Node.js / npm for example bundle builds
+- network access for the first `quickjs-wasm-sys` WASI SDK fetch, or `QUICKJS_WASM_SYS_WASI_SDK_PATH` pointing at a local WASI SDK
 
 ```bash
 cargo test
@@ -77,11 +78,14 @@ scripts/package_smoke.sh
 Create a Hono app:
 
 ```bash
+cargo install --path crates/ic-edge-pack --bin ic-edge
 cargo run -p ic-edge-pack --bin ic-edge -- init hono my-app
 cd my-app
 npm install
 npm run build
 ```
+
+Generated apps assume an installed `ic-edge` CLI. Repository examples are developer fixtures and their `npm run build` scripts call `cargo run -q -p ic-edge-pack --bin ic-edge -- pack ...` from this workspace.
 
 Local ICP flow:
 
@@ -100,15 +104,15 @@ v1 preview targets a Worker-compatible Core+Cache subset, not a full Cloudflare 
 
 Host smoke is green for Hono basic routes, JSON echo, params/query, CORS, zod, Cache API subset, JS fetch host bridge, OpenAI non-streaming mock bridge, and Upstash mock bridge.
 
-Canister backend is quickjs-ic only: `wasm32-wasip1` build, WASI import stubbing, then `wasi2ic`. Local canister smoke covers direct update, Gateway, HTTPS outcall, stable Cache, runtime generation cache, and rollback.
+Canister backend is quickjs-ic only: `wasm32-wasip1` build, WASI import stubbing, then `wasi2ic`. Local canister smoke covers chunked bundle upload, direct update, Gateway, HTTPS outcall, stable Cache, runtime generation cache, and rollback.
 
 Cache API is canister-local stable storage, not a CDN cache. It supports `caches.default`, `caches.open`, `match`, `put`, `delete`, and `Cache-Control: max-age=N` expiration; `Set-Cookie` responses, Range, and conditional request behavior are out of scope for v1 preview.
 
-Runtime limits are fixed: bundle 2 MiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, cache name 128 bytes, cache key 2 KiB, cache index 1024 entries / 128 KiB JSON, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
+Runtime limits are fixed: bundle 2 MiB, bundle upload chunk 512 KiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, cache name 128 bytes, cache key 2 KiB, cache index 1024 entries / 128 KiB JSON, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
 
 ## Release Gates
 
-Before publishing changes, run:
+Local release gate:
 
 ```bash
 scripts/ci_local.sh
@@ -116,7 +120,17 @@ scripts/icp_local_smoke.sh
 scripts/package_crates.sh
 ```
 
-Mainnet preflight is not part of the v1 preview gate. Local deploy smoke is the required release gate.
+Public release gate:
+
+```bash
+scripts/ci_local.sh
+scripts/icp_local_smoke.sh
+scripts/package_crates.sh
+IC_EDGE_PREFLIGHT_EVIDENCE=docs/release-evidence/mainnet-preflight-YYYY-MM-DD.md \
+  IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh
+```
+
+Mainnet preflight does not deploy. Capture public release evidence under `docs/release-evidence/`.
 
 ## Docs
 

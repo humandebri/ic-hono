@@ -14,7 +14,7 @@ fn pack_runs_esbuild_and_checks_contract() {
     let esbuild = bin.join("esbuild");
     fs::write(
         &esbuild,
-        "#!/usr/bin/env sh\nfor arg in \"$@\"; do case \"$arg\" in --outfile=*) out=\"${arg#--outfile=}\";; esac; done\nmkdir -p \"$(dirname \"$out\")\"\nprintf 'var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response(\"ok\") } }))();' > \"$out\"\n",
+        "#!/usr/bin/env sh\nfor arg in \"$@\"; do case \"$arg\" in --outfile=*) out=\"${arg#--outfile=}\";; esac; done\nmkdir -p \"$(dirname \"$out\")\"\nprintf '%s\n' \"$@\" > \"$out.args\"\nprintf 'var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response(\"ok\") } }))();' > \"$out\"\n",
     )
     .unwrap();
     #[cfg(unix)]
@@ -35,6 +35,8 @@ fn pack_runs_esbuild_and_checks_contract() {
     ])
     .unwrap();
     assert_eq!(output, format!("packed {out_file}"));
+    let args = fs::read_to_string(format!("{out_file}.args")).unwrap();
+    assert!(args.lines().any(|arg| arg == "--minify"));
 }
 
 #[test]
@@ -110,6 +112,47 @@ fn creates_candid_upload_argument() {
     assert_eq!(
         candid_upload_argument("app", &[0, 15, 255]),
         "(\"app\", blob \"\\00\\0f\\ff\")"
+    );
+    assert_eq!(
+        candid_begin_upload_argument("app", 3).unwrap(),
+        "(\"app\", 3 : nat64)"
+    );
+    assert_eq!(
+        candid_append_chunk_argument("app", 2, &[255]).unwrap(),
+        "(\"app\", 2 : nat64, blob \"\\ff\")"
+    );
+    assert_eq!(candid_module_argument("app"), "(\"app\")");
+}
+
+#[test]
+fn abort_after_upload_error_preserves_original_error() {
+    let error = abort_after_upload_error(
+        "missing-canister",
+        Some("local"),
+        "app",
+        "commit failed".to_string(),
+    );
+    assert_eq!(error, "commit failed");
+}
+
+#[test]
+fn parses_canister_call_result_variants() {
+    assert!(parse_canister_call_result(b"(variant { Ok })\n", b"").is_ok());
+    assert_eq!(
+        parse_canister_call_result(
+            b"(variant { Err = \"bundle chunk offset mismatch\" })\n",
+            b"",
+        )
+        .unwrap_err(),
+        "bundle chunk offset mismatch"
+    );
+    assert_eq!(
+        parse_canister_call_result(b"", b"ERR failed").unwrap_err(),
+        "ERR failed"
+    );
+    assert_eq!(
+        parse_canister_call_result(b"unexpected", b"").unwrap_err(),
+        "unexpected"
     );
 }
 

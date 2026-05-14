@@ -46,6 +46,10 @@ service : {
   http_request : (HttpRequest) -> (HttpResponse) query;
   http_request_update : (HttpRequest) -> (HttpResponse);
   upload_bundle : (text, blob) -> (variant { Ok; Err : text });
+  begin_bundle_upload : (text, nat64) -> (variant { Ok; Err : text });
+  append_bundle_chunk : (text, nat64, blob) -> (variant { Ok; Err : text });
+  commit_bundle_upload : (text) -> (variant { Ok; Err : text });
+  abort_bundle_upload : (text) -> (variant { Ok; Err : text });
   set_env : (text, text) -> (variant { Ok; Err : text });
   env_names : () -> (vec text) query;
   bundle_size : (text) -> (opt nat64) query;

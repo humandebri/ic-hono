@@ -25,6 +25,7 @@ v1 preview の backend 調査ノート。DFINITY [`ic-quickjs-demo`](https://git
 - 旧 `quickjs-wasm` backend は削除し、`quickjs-ic` を主 backend に昇格した。
 - typed bridge は response status / fetch id の numeric DTO 化まで完了。小数や特殊 numeric は引き続き support subset 外。
 - Hono basic / zod / jose / fetch / Cache / rollback smoke は `scripts/icp_local_smoke.sh` で確認する。
+- minified bundle 評価後の IC context 注入は、単一 eval で wasm QuickJS の parser 状態不整合を起こしたため、context init / caller / canisterId を分割 eval する。
 
 ## Current Risk
 

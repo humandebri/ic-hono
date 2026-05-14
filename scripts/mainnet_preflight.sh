@@ -9,6 +9,25 @@ if [[ "${IC_EDGE_MAINNET_PREFLIGHT:-0}" != "1" ]]; then
   exit 1
 fi
 
+write_evidence() {
+  local path="${IC_EDGE_PREFLIGHT_EVIDENCE:-}"
+  if [[ -z "$path" ]]; then
+    return 0
+  fi
+
+  mkdir -p "$(dirname "$path")"
+  {
+    printf '# Mainnet Preflight Evidence\n\n'
+    printf -- '- Date: %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf -- '- Command: `IC_EDGE_PREFLIGHT_EVIDENCE=%s IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh`\n' "$path"
+    printf -- '- Identity principal: `%s`\n' "$principal"
+    printf -- '- Edge canister status:\n\n'
+    printf '```text\n%s\n```\n\n' "$status"
+    printf -- '- Wasm import audit result: no `env.*` or `wasi_snapshot_preview1.*` imports after backend build\n'
+    printf -- '- Secret check: no secrets included\n'
+  } >"$path"
+}
+
 cargo fmt --all --check
 cargo test
 scripts/check_api_contract.sh
@@ -35,4 +54,5 @@ grep -qi 'running' <<<"$status" || {
   exit 1
 }
 
+write_evidence
 echo "mainnet preflight passed for identity $principal"

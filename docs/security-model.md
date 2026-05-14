@@ -6,7 +6,7 @@ User bundle は canister 内 QuickJS context で実行する。browser DOM、nat
 
 ## Bundle Upload
 
-`upload_bundle(module, bytes)` は controller 限定。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。
+`upload_bundle(module, bytes)` と chunk upload API は controller 限定。`upload_bundle` は small/direct/debug 互換 API、CLI 標準経路は chunk upload。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。chunk upload は staging KV に保存し、`commit_bundle_upload(module)` 成功時だけ runtime module と generation を更新する。通信断などで staging KV が残っても、次回同一 module の `begin_bundle_upload` または direct `upload_bundle` が破棄する。
 
 `set_env(name, value)` と direct smoke 用 `fetch_outcall(url)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
 
@@ -31,7 +31,7 @@ Outbound は JS `fetch("https://...")` のみ HTTPS outcall に接続する。pl
 
 公開 API は compatibility matrix に記録した subset のみ。Node core modules、filesystem、process mutation、DOM、streams full support は非対応。
 
-`http_request_update` は `raw_rand().await` 完了後に generation / bundle / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`upload_bundle()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
+`http_request_update` は `raw_rand().await` 完了後に generation / bundle / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`upload_bundle()` / `commit_bundle_upload()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
 
 ## Cache
 

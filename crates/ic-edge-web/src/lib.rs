@@ -10,6 +10,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 pub mod limits {
     /// Maximum JavaScript bundle size accepted by upload APIs.
     pub const MAX_BUNDLE_BYTES: usize = 2 * 1024 * 1024;
+    /// Maximum bundle upload chunk size accepted by the canister API.
+    pub const MAX_BUNDLE_UPLOAD_CHUNK_BYTES: usize = 512 * 1024;
     /// Maximum inbound HTTP body size.
     pub const MAX_INBOUND_BODY_BYTES: usize = 1024 * 1024;
     /// Maximum response body produced by JavaScript.

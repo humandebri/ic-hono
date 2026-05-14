@@ -10,7 +10,10 @@ Use `examples/hono-basic` for routing, JSON echo, params/query, CORS, byte bodie
 cd examples/hono-basic
 npm install
 npm run build
+cd ../..
 ```
+
+Repo example の `npm run build` は workspace の `cargo run -q -p ic-edge-pack --bin ic-edge -- pack ...` を呼ぶ。生成 app は installed `ic-edge` を使う。
 
 Run the bundle on host QuickJS:
 
@@ -83,7 +86,8 @@ Use `IC_EDGE_RESTART_NETWORK=1` when the existing local network is stuck.
 Run the non-mutating mainnet release gate before publishing:
 
 ```bash
-IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh
+IC_EDGE_PREFLIGHT_EVIDENCE=docs/release-evidence/mainnet-preflight-YYYY-MM-DD.md \
+  IC_EDGE_MAINNET_PREFLIGHT=1 scripts/mainnet_preflight.sh
 ```
 
 The preflight builds locally, audits imports, checks identity/cycles on mainnet, and checks the configured `edge` canister status with `-e ic`.

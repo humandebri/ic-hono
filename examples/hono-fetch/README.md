@@ -9,3 +9,5 @@ Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 npm install
 npm run build
 ```
+
+この repo example の `npm run build` は workspace の `cargo run -q -p ic-edge-pack --bin ic-edge -- pack ...` を呼ぶ。生成 app の `npm run build` は installed `ic-edge` を使う。

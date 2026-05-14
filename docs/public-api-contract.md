@@ -11,7 +11,7 @@ v1 preview の公開契約。crate semver は `0.2.0`。`v1` は product/API con
 - Canister HTTP bridge: `CdkHttpRequest`, `CdkHttpResponse`, `handle_cdk_http`, `handle_cdk_http_async`
 - HTTPS outcall bridge: `https_outcall_fetch`, `build_https_outcall_args`, `transform_strip_headers`
 - CLI commands: `ic-edge init hono`, `ic-edge pack`, `ic-edge upload`
-- Canister methods: `http_request`, `http_request_update`, `upload_bundle`, `set_env`, `env_names`, `bundle_size`, `runtime_info`, `runtime_history`, `rollback_runtime`, `fetch_outcall`
+- Canister methods: `http_request`, `http_request_update`, `upload_bundle`, `begin_bundle_upload`, `append_bundle_chunk`, `commit_bundle_upload`, `abort_bundle_upload`, `set_env`, `env_names`, `bundle_size`, `runtime_info`, `runtime_history`, `rollback_runtime`, `fetch_outcall`
 
 ## Web API Subset
 

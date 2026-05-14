@@ -9,7 +9,7 @@ Durable Edge Runtime on ICP v1 preview の互換性状況。crate semver は `0.
 
 | Package | Status | Host Evidence | Canister Evidence |
 | --- | --- | --- | --- |
-| `hono` | pass | `examples/hono-basic` bundle を QuickJS で eval。basic route、JSON、params/query、CORS、Cache roundtrip が通過 | `scripts/icp_local_smoke.sh` で direct update / Gateway / stable Cache が通過 |
+| `hono` | pass | `examples/hono-basic` の minified bundle を QuickJS で eval。basic route、JSON、params/query、CORS、Cache roundtrip が通過 | `scripts/icp_local_smoke.sh` で minified bundle canister smoke、direct update / Gateway / stable Cache が通過 |
 | `zod` | pass | `examples/hono-zod` で valid JSON validation が通過 | `scripts/icp_local_smoke.sh` で direct update が通過 |
 | `jose` | pass | `examples/hono-jose` で HS256 sign/verify roundtrip が通過 | `scripts/icp_local_smoke.sh` で direct update が通過 |
 | `openai` | optional real API smoke | `examples/hono-openai` で `responses.create` non-streaming を mock `HostFetch` で通過。model は `OPENAI_MODEL` で差し替え可能 | optional `IC_EDGE_FULL_SMOKE=1` with real API key |
@@ -19,7 +19,7 @@ Durable Edge Runtime on ICP v1 preview の互換性状況。crate semver は `0.
 
 | Feature | Status | Note |
 | --- | --- | --- |
-| `app.fetch()` | pass | IIFE bundle の `default.fetch` を QuickJS から呼ぶ |
+| `app.fetch()` | pass | minified IIFE bundle の `default.fetch` を QuickJS から呼ぶ |
 | text response | pass | host と Gateway `GET /` -> `ok` |
 | JSON request body | pass | host と Gateway `POST /echo` -> request JSON |
 | JSON numeric response | pass | host と canister `/number` -> `{"count":1}` |
@@ -29,7 +29,7 @@ Durable Edge Runtime on ICP v1 preview の互換性状況。crate semver は `0.
 | query string | pass | host と Gateway `c.req.query('q')` |
 | middleware | pass | CORS の response header と `OPTIONS` preflight が通過 |
 | external fetch | pass | JS `fetch()` -> HTTPS outcall が local canister direct update で通過 |
-| runtime generation | pass | `runtime_info()` generation が upload/env で増加し、upgrade 後と連続 request 後も維持される |
+| runtime generation | pass | `runtime_info()` generation が chunk upload/env で増加し、upgrade 後と連続 request 後も維持される |
 | rollback | pass | `runtime_history()` と `rollback_runtime()` で bundle/env snapshot を復元 |
 
 ## Web Standards Subset

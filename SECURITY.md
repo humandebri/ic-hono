@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-`ic-hono` is currently a v1 preview runtime contract with crate semver `0.2.0`.
+`ic-edge-workers` is currently a v1 preview runtime contract with crate semver `0.2.0`.
 
 Security fixes target the latest `main` branch until formal release branches exist.
 

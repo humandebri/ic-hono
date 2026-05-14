@@ -68,13 +68,22 @@ impl QuickJsRuntime {
 
     /// Installs per-request IC identity values.
     pub fn install_ic_context(&self, caller: &str, canister_id: &str) -> Result<()> {
-        let script = format!(
-            "globalThis.ic ||= {{}}; globalThis.ic.caller = () => {}; globalThis.ic.canisterId = () => {}",
-            json_string(caller)?,
+        self.context
+            .eval_global("ic-context-init.js", "globalThis.ic ||= {}")
+            .map_err(to_runtime_error)?;
+        let caller_script = format!(
+            "globalThis.ic.caller = function() {{ return {} }}",
+            json_string(caller)?
+        );
+        self.context
+            .eval_global("ic-caller.js", &caller_script)
+            .map_err(to_runtime_error)?;
+        let canister_script = format!(
+            "globalThis.ic.canisterId = function() {{ return {} }}",
             json_string(canister_id)?
         );
         self.context
-            .eval_global("ic-context.js", &script)
+            .eval_global("ic-canister-id.js", &canister_script)
             .map_err(to_runtime_error)?;
         Ok(())
     }

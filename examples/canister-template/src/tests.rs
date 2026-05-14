@@ -1,7 +1,11 @@
 //! `examples/canister-template` verifies controller-facing runtime state.
 //! Tests keep endpoint and rollback checks out of the production module.
 
-use super::{bump_generation, history_support, http_request, read_generation};
+use super::{
+    abort_bundle_upload_in_store, append_bundle_chunk_in_store, begin_bundle_upload_in_store,
+    bump_generation, commit_bundle_upload_in_store, history_support, http_request, read_generation,
+    upload_bundle_in_store,
+};
 use ic_edge_canister::CdkHttpRequest;
 use ic_edge_store::{EdgeStore, StableEdgeStore};
 
@@ -25,6 +29,71 @@ fn generation_starts_at_zero_and_increments() {
     let mut store = StableEdgeStore::new();
     assert_eq!(read_generation(&store), 0);
     assert_eq!(bump_generation(&mut store).unwrap(), 1);
+    assert_eq!(read_generation(&store), 1);
+}
+
+#[test]
+fn chunk_upload_commits_bundle_and_bumps_generation_once() {
+    let mut store = StableEdgeStore::new();
+    begin_bundle_upload_in_store(&mut store, "app", 11).unwrap();
+    append_bundle_chunk_in_store(&mut store, "app", 0, b"hello ").unwrap();
+    append_bundle_chunk_in_store(&mut store, "app", 6, b"world").unwrap();
+
+    assert_eq!(read_generation(&store), 0);
+    assert_eq!(store.get_module("app"), Err(ic_edge_store::Error::NotFound));
+
+    commit_bundle_upload_in_store(&mut store, "app").unwrap();
+
+    assert_eq!(store.get_module("app").unwrap(), b"hello world");
+    assert_eq!(read_generation(&store), 1);
+}
+
+#[test]
+fn chunk_upload_rejects_invalid_sizes_and_offsets() {
+    let mut store = StableEdgeStore::new();
+    assert!(begin_bundle_upload_in_store(
+        &mut store,
+        "app",
+        ic_edge_web::limits::MAX_BUNDLE_BYTES + 1,
+    )
+    .is_err());
+
+    begin_bundle_upload_in_store(&mut store, "app", 4).unwrap();
+    assert!(append_bundle_chunk_in_store(&mut store, "app", 1, b"a").is_err());
+    assert!(append_bundle_chunk_in_store(
+        &mut store,
+        "app",
+        0,
+        &vec![0; ic_edge_web::limits::MAX_BUNDLE_UPLOAD_CHUNK_BYTES + 1],
+    )
+    .is_err());
+
+    append_bundle_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
+    assert!(append_bundle_chunk_in_store(&mut store, "app", 3, b"de").is_err());
+    assert!(commit_bundle_upload_in_store(&mut store, "app").is_err());
+}
+
+#[test]
+fn chunk_upload_abort_discards_staging() {
+    let mut store = StableEdgeStore::new();
+    begin_bundle_upload_in_store(&mut store, "app", 3).unwrap();
+    append_bundle_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
+    abort_bundle_upload_in_store(&mut store, "app").unwrap();
+
+    assert!(commit_bundle_upload_in_store(&mut store, "app").is_err());
+    assert_eq!(read_generation(&store), 0);
+}
+
+#[test]
+fn direct_upload_discards_existing_chunk_staging() {
+    let mut store = StableEdgeStore::new();
+    begin_bundle_upload_in_store(&mut store, "app", 3).unwrap();
+    append_bundle_chunk_in_store(&mut store, "app", 0, b"old").unwrap();
+
+    upload_bundle_in_store(&mut store, "app", b"direct").unwrap();
+
+    assert!(commit_bundle_upload_in_store(&mut store, "app").is_err());
+    assert_eq!(store.get_module("app").unwrap(), b"direct");
     assert_eq!(read_generation(&store), 1);
 }
 

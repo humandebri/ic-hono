@@ -4,7 +4,7 @@ Known limitations are tracked here as implementation issues. v1 preview remains 
 
 ## Release Blockers
 
-- Mainnet preflight evidence must be captured before public release.
+- Mainnet preflight evidence must be captured under `docs/release-evidence/` before public release.
 - Public API contract changes must update `docs/public-api-contract.md` and release audit evidence.
 
 ## Compatibility Work
@@ -20,3 +20,4 @@ Known limitations are tracked here as implementation issues. v1 preview remains 
 - Upgrade hooks: add explicit pre/post upgrade hooks once runtime state migration requirements are stable.
 - Mainnet observability: document cycles, status, and failure triage after preflight is stable.
 - Cookbook expansion: add recipes only for examples covered by host or canister smoke.
+- QuickJS binding replacement: keep `quickjs-wasm-rs` for v1 preview, then evaluate candidates against the recorded replacement criteria. Completion evidence must record candidate name, verification commands, smoke results, and either defer reason or next action.
