@@ -22,6 +22,7 @@ jobs:
       - name: Install wasm tools
         run: |
           cargo install ic-wasm
+          cargo install wasm-tools
           cargo install wasi2ic
       - name: Install example dependencies
         run: |
