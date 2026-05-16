@@ -589,6 +589,43 @@ fn fetch_consumes_request_body_and_keeps_empty_override() {
 }
 
 #[test]
+fn fetch_accepts_ic_replication_options_and_rejects_invalid_values() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime.install_fetch(EchoFetch).unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                await fetch('https://api.example.test/echo', {
+                  ic: { replicated: true }
+                })
+                const request = new Request('https://api.example.test/echo', {
+                  ic: { replicated: true }
+                })
+                await fetch(request)
+                let invalid = ''
+                try {
+                  await fetch('https://api.example.test/echo', {
+                    ic: { replicated: 'yes' }
+                  })
+                } catch (error) {
+                  invalid = error.name
+                }
+                return Response.json({
+                  requestReplicated: request.ic.replicated,
+                  invalid
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"requestReplicated":true,"invalid":"TypeError"}"#
+    );
+}
+
+#[test]
 fn cache_api_keeps_structured_keys_separate() {
     let mut runtime = QuickJsRuntime::new().unwrap();
     runtime

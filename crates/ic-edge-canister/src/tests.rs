@@ -132,6 +132,7 @@ fn builds_get_outcall_with_default_response_limit() {
     assert_eq!(args.headers.len(), 1);
     assert_eq!(args.body, None);
     assert!(args.transform.is_none());
+    assert_eq!(args.is_replicated, Some(false));
 }
 
 #[test]
@@ -146,6 +147,37 @@ fn builds_post_outcall_with_body_and_explicit_limit() {
     assert_eq!(args.max_response_bytes, Some(4096));
     assert!(matches!(args.method, HttpMethod::POST));
     assert_eq!(args.body, Some(br#"{"ok":true}"#.to_vec()));
+}
+
+#[test]
+fn builds_outcall_with_explicit_replication_modes() {
+    let replicated = build_https_outcall_args_with_replication(
+        Request::new(
+            "GET".to_string(),
+            "https://example.com/api".to_string(),
+            Headers::new(),
+            Body::empty(),
+        ),
+        "transform_strip_headers",
+        Some(4096),
+        OutcallReplication::Replicated,
+    )
+    .unwrap();
+    assert_eq!(replicated.is_replicated, Some(true));
+
+    let non_replicated = build_https_outcall_args_with_replication(
+        Request::new(
+            "GET".to_string(),
+            "https://example.com/api".to_string(),
+            Headers::new(),
+            Body::empty(),
+        ),
+        "transform_strip_headers",
+        Some(4096),
+        OutcallReplication::NonReplicated,
+    )
+    .unwrap();
+    assert_eq!(non_replicated.is_replicated, Some(false));
 }
 
 #[test]

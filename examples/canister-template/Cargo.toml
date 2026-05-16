@@ -12,7 +12,7 @@ quickjs-ic = ["ic-edge-runtime/quickjs-ic"]
 
 [dependencies]
 candid = "0.10"
-ic-cdk = "0.18"
+ic-cdk = "0.19"
 ic-edge-canister = { path = "../../crates/ic-edge-canister" }
 ic-edge-runtime = { path = "../../crates/ic-edge-runtime" }
 ic-edge-store = { path = "../../crates/ic-edge-store" }

@@ -43,6 +43,7 @@ for method in \
   runtime_history \
   rollback_runtime \
   fetch_outcall \
+  fetch_outcall_replicated \
   transform_strip_headers
 do
   require_did "$method"

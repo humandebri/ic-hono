@@ -12,6 +12,7 @@ globalThis.fetch = (input, init = {}) => {
     return Promise.reject(new Error('This operation was aborted'))
   }
   const isRequest = input instanceof Request
+  const ic = __ic_edge_normalize_ic_options(isRequest ? input.ic : undefined, init)
   const url = isRequest ? input.url : String(input && input.href ? input.href : input)
   const method = String(init.method || (isRequest ? input.method : 'GET')).toUpperCase()
   const headers = new Headers(input instanceof Request ? input.headers : [])
@@ -30,7 +31,8 @@ globalThis.fetch = (input, init = {}) => {
     method,
     url,
     headers: headers.entriesArray(),
-    body: bodyValue
+    body: bodyValue,
+    replicated: ic.replicated
   })
   return new Promise((resolve, reject) => {
     globalThis.__ic_edge_fetch_pending[id] = { resolve, reject }

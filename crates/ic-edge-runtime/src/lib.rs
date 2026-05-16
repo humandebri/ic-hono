@@ -63,7 +63,28 @@ pub trait AsyncHostFetch {
     fn fetch<'a>(
         &'a mut self,
         request: Request,
+        options: HostFetchOptions,
     ) -> Pin<Box<dyn Future<Output = Result<Response>> + 'a>>;
+}
+
+/// Options carried from JavaScript `fetch()` to the async host boundary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HostFetchOptions {
+    /// Whether the IC HTTPS outcall should use replicated execution.
+    pub replicated: bool,
+}
+
+impl HostFetchOptions {
+    /// Creates options from the `ic.replicated` fetch extension.
+    pub fn new(replicated: bool) -> Self {
+        Self { replicated }
+    }
+}
+
+impl Default for HostFetchOptions {
+    fn default() -> Self {
+        Self { replicated: false }
+    }
 }
 
 /// Persistence boundary backing the Worker Cache API subset.

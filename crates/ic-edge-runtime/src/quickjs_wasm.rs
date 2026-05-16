@@ -269,9 +269,10 @@ impl AsyncEdgeRuntime for QuickJsRuntime {
 
                 for fetch_request in requests {
                     let fetch_id = fetch_request.id();
+                    let options = fetch_request.options();
                     let request = fetch_request.to_request()?;
                     let result = match self.async_fetcher.as_mut() {
-                        Some(fetcher) => fetcher.fetch(request).await,
+                        Some(fetcher) => fetcher.fetch(request, options).await,
                         None => Err(Error::Runtime("fetch is not configured".to_string())),
                     };
                     match result {

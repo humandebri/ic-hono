@@ -15,6 +15,11 @@ test -f "$init_tmp/src/app.ts" || {
 pack_tmp="/tmp/ic-edge-pack-basic.js"
 cargo run -q -p ic-edge-pack --bin ic-edge -- pack examples/hono-basic/src/app.ts --out "$pack_tmp" >/dev/null
 
+(
+  cd examples/hono-fetch
+  ./node_modules/.bin/tsc --noEmit --lib es2022,dom --moduleResolution bundler --module esnext --target es2022 src/app.ts
+)
+
 for entry in \
   examples/hono-basic/src/app.ts \
   examples/hono-zod/src/app.ts \

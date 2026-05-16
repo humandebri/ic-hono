@@ -84,6 +84,9 @@ fn init_hono_creates_template_without_overwriting() {
     );
     assert!(root.join("package.json").exists());
     assert!(root.join("src/app.ts").exists());
+    let app_source = fs::read_to_string(root.join("src/app.ts")).unwrap();
+    assert!(app_source.contains("interface RequestInit"));
+    assert!(app_source.contains("ic?: { replicated?: boolean }"));
     assert!(run(vec![
         "init".to_string(),
         "hono".to_string(),

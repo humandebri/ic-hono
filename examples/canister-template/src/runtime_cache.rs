@@ -1,7 +1,8 @@
 //! `examples/canister-template` caches the QuickJS runtime between update calls.
 //! The cache is generation-scoped so upload/env changes rebuild the runtime.
 
-use ic_edge_runtime::{AsyncEdgeRuntime, AsyncHostFetch, QuickJsRuntime};
+use ic_edge_canister::OutcallReplication;
+use ic_edge_runtime::{AsyncEdgeRuntime, AsyncHostFetch, HostFetchOptions, QuickJsRuntime};
 use ic_edge_web::{Request, Response};
 use std::cell::RefCell;
 use std::future::Future;
@@ -47,9 +48,21 @@ impl AsyncHostFetch for OutcallFetch {
     fn fetch<'a>(
         &'a mut self,
         request: Request,
+        options: HostFetchOptions,
     ) -> Pin<Box<dyn Future<Output = ic_edge_web::Result<Response>> + 'a>> {
         Box::pin(async move {
-            crate::https_outcall_fetch(request, "transform_strip_headers", Some(64 * 1024)).await
+            let replication = if options.replicated {
+                OutcallReplication::Replicated
+            } else {
+                OutcallReplication::NonReplicated
+            };
+            crate::https_outcall_fetch_with_replication(
+                request,
+                "transform_strip_headers",
+                Some(64 * 1024),
+                replication,
+            )
+            .await
         })
     }
 }

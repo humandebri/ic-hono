@@ -7,17 +7,18 @@ v1 preview の公開契約。crate semver は `0.2.0`。`v1` は product/API con
 - Rust crates: `ic-edge-runtime`, `ic-edge-web`, `ic-edge-canister`, `ic-edge-store`, `ic-edge-pack`, `ic-edge-loader`
 - Runtime traits: `EdgeRuntime`, `AsyncEdgeRuntime`, `AsyncHostFetch`, `CacheHost`
 - Runtime type: `QuickJsRuntime`
+- Runtime fetch options: `HostFetchOptions`
 - Web value types: `Request`, `Response`, `Headers`, `Body`, `Error`, `limits`
 - Canister HTTP bridge: `CdkHttpRequest`, `CdkHttpResponse`, `handle_cdk_http`, `handle_cdk_http_async`
-- HTTPS outcall bridge: `https_outcall_fetch`, `build_https_outcall_args`, `transform_strip_headers`
+- HTTPS outcall bridge: `OutcallReplication`, `https_outcall_fetch`, `https_outcall_fetch_with_replication`, `build_https_outcall_args`, `build_https_outcall_args_with_replication`, `transform_strip_headers`
 - CLI commands: `ic-edge init hono`, `ic-edge pack`, `ic-edge upload`
-- Canister methods: `http_request`, `http_request_update`, `upload_bundle`, `begin_bundle_upload`, `append_bundle_chunk`, `commit_bundle_upload`, `abort_bundle_upload`, `set_env`, `env_names`, `bundle_size`, `runtime_info`, `runtime_history`, `rollback_runtime`, `fetch_outcall`
+- Canister methods: `http_request`, `http_request_update`, `upload_bundle`, `begin_bundle_upload`, `append_bundle_chunk`, `commit_bundle_upload`, `abort_bundle_upload`, `set_env`, `env_names`, `bundle_size`, `runtime_info`, `runtime_history`, `rollback_runtime`, `fetch_outcall`, `fetch_outcall_replicated`
 
 ## Web API Subset
 
 - `Request` / `Response` / `Headers` / `URL` / `URLSearchParams`
 - `Blob` and urlencoded `FormData`
-- `fetch()` via host bridge or canister HTTPS outcalls
+- `fetch()` via host bridge or canister HTTPS outcalls。`ic.replicated` は outcall replication mode を指定する。
 - `crypto.getRandomValues`, `crypto.subtle.digest` SHA-256, raw HMAC-SHA-256 `importKey` / `sign` / `verify`
 - `Cache` / `caches.default` / `caches.open` with `match` / `put` / `delete` and `Cache-Control: max-age=N` expiration
 - `process.env` read-only style injection

@@ -160,13 +160,17 @@ pub trait HostFetch {
 ```
 
 `QuickJsRuntime::install_fetch()` で JS `fetch()` から Rust handler を呼ぶ。ICP では同じ境界を HTTPS outcalls に接続する。
+canister runtime の `AsyncHostFetch` は `HostFetchOptions { replicated }` を受け取る。JS は `fetch(url, { ic: { replicated: true } })` で複製 outcall を選ぶ。未指定は非複製。
 
 `ic-edge-canister` は HTTPS outcalls adapter を持つ。
 
 - `https_outcall_fetch(request, "transform_strip_headers", max_response_bytes)`
+- `https_outcall_fetch_with_replication(request, "transform_strip_headers", max_response_bytes, replication)`
 - `build_https_outcall_args(...)`
+- `build_https_outcall_args_with_replication(...)`
 - `transform_strip_headers(...)`
 - `examples/canister-template::fetch_outcall(url)`
+- `examples/canister-template::fetch_outcall_replicated(url)`
 
 制約:
 
@@ -176,3 +180,5 @@ pub trait HostFetch {
 - method は `GET` / `POST` / `HEAD` のみ。
 - `max_response_bytes` は既定 64 KiB。
 - transform は consensus 用に response header を削除する。
+- `ic.replicated` が boolean 以外なら `TypeError`。
+- 非複製 outcall は実験的で、複製 outcall より完全性保証が弱い。

@@ -119,6 +119,7 @@ expect_contains 'Ok' icp canister call edge rollback_runtime "(${rollback_genera
 expect_contains 'IC_EDGE_SMOKE' icp canister call edge env_names '()' --environment local
 expect_not_contains 'IC_EDGE_ROLLBACK' icp canister call edge env_names '()' --environment local
 expect_contains 'status_code = 200' icp canister call edge fetch_outcall '("https://example.com/")' --environment local
+expect_contains 'status_code = 200' icp canister call edge fetch_outcall_replicated '("https://example.com/")' --environment local
 runtime_info_before_upgrade="$(icp canister call edge runtime_info '()' --environment local)"
 grep -q 'generation' <<<"$runtime_info_before_upgrade"
 run_logged_retry icp-deploy-upgrade icp deploy edge --yes
@@ -179,6 +180,7 @@ expect_contains '\\22ok\\22:true' call_update POST /validate '\7b\22name\22\3a\2
 pack_example examples/hono-fetch/src/app.ts examples/hono-fetch/dist/app.bundle.js
 upload_example examples/hono-fetch/dist/app.bundle.js
 expect_contains 'status_code = 200' call_update GET /github ''
+expect_contains '\\22status\\22:200' call_update GET /example-replicated ''
 
 pack_example examples/hono-jose/src/app.ts examples/hono-jose/dist/app.bundle.js
 upload_example examples/hono-jose/dist/app.bundle.js

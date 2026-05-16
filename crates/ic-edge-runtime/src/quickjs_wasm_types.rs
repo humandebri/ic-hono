@@ -1,6 +1,7 @@
 //! `crates/ic-edge-runtime` keeps wasm QuickJS JSON bridge DTOs here.
 //! Splitting these types keeps the runtime control flow small and auditable.
 
+use crate::HostFetchOptions;
 use ic_edge_web::{limits, Body, Error, Headers, Request, Response, Result};
 use serde::{Deserialize, Serialize};
 
@@ -64,6 +65,7 @@ pub(crate) struct RuntimeFetchRequest {
     url: String,
     headers: Vec<(String, String)>,
     body: RuntimeBody,
+    replicated: bool,
 }
 
 impl RuntimeFetchRequest {
@@ -78,6 +80,10 @@ impl RuntimeFetchRequest {
             Headers::from_pairs(self.headers.clone())?,
             Body::from_bytes(self.body.clone().into_bytes()),
         ))
+    }
+
+    pub(crate) fn options(&self) -> HostFetchOptions {
+        HostFetchOptions::new(self.replicated)
     }
 }
 

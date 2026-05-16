@@ -14,6 +14,7 @@ globalThis.fetch = (input, init = {}) => {
     return Promise.reject(new Error('fetch is not configured'))
   }
   const isRequest = input instanceof Request
+  __ic_edge_normalize_ic_options(isRequest ? input.ic : undefined, init)
   const url = isRequest ? input.url : String(input && input.href ? input.href : input)
   const method = String(init.method || (isRequest ? input.method : 'GET')).toUpperCase()
   const headers = new Headers(input instanceof Request ? input.headers : [])

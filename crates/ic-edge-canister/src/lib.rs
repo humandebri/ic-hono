@@ -69,6 +69,21 @@ pub struct CdkHttpResponse {
     pub upgrade: Option<bool>,
 }
 
+/// IC HTTPS outcall replication mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OutcallReplication {
+    /// A single replica performs the request. This has weak integrity guarantees.
+    NonReplicated,
+    /// Multiple replicas perform the request and consensus checks the response.
+    Replicated,
+}
+
+impl OutcallReplication {
+    fn is_replicated(self) -> bool {
+        matches!(self, Self::Replicated)
+    }
+}
+
 /// Handles a runtime-neutral IC HTTP request.
 pub fn handle_http(
     runtime: &mut impl EdgeRuntime,
@@ -129,7 +144,28 @@ pub async fn https_outcall_fetch(
     transform_name: &str,
     max_response_bytes: Option<u64>,
 ) -> Result<Response> {
-    let args = build_https_outcall_args(request, transform_name, max_response_bytes)?;
+    https_outcall_fetch_with_replication(
+        request,
+        transform_name,
+        max_response_bytes,
+        OutcallReplication::NonReplicated,
+    )
+    .await
+}
+
+/// Performs an HTTPS outcall with an explicit replication mode.
+pub async fn https_outcall_fetch_with_replication(
+    request: Request,
+    transform_name: &str,
+    max_response_bytes: Option<u64>,
+    replication: OutcallReplication,
+) -> Result<Response> {
+    let args = build_https_outcall_args_with_replication(
+        request,
+        transform_name,
+        max_response_bytes,
+        replication,
+    )?;
     let response = http_request(&args)
         .await
         .map_err(|error| Error::Runtime(format!("{error:?}")))?;
@@ -141,6 +177,21 @@ pub fn build_https_outcall_args(
     request: Request,
     transform_name: &str,
     max_response_bytes: Option<u64>,
+) -> Result<HttpRequestArgs> {
+    build_https_outcall_args_with_replication(
+        request,
+        transform_name,
+        max_response_bytes,
+        OutcallReplication::NonReplicated,
+    )
+}
+
+/// Builds management canister HTTPS outcall arguments with an explicit replication mode.
+pub fn build_https_outcall_args_with_replication(
+    request: Request,
+    transform_name: &str,
+    max_response_bytes: Option<u64>,
+    replication: OutcallReplication,
 ) -> Result<HttpRequestArgs> {
     let url = validate_outcall_url(&request.url)?;
     let response_limit = max_response_bytes.unwrap_or(limits::DEFAULT_FETCH_RESPONSE_BYTES);
@@ -164,6 +215,7 @@ pub fn build_https_outcall_args(
             .collect(),
         body: body_for_method(&request.method, request.body),
         transform: transform_context(transform_name),
+        is_replicated: Some(replication.is_replicated()),
     })
 }
 

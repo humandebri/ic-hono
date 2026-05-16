@@ -20,6 +20,14 @@ const __ic_edge_is_response = (value) => {
     return false
   }
 }
+const __ic_edge_normalize_ic_options = (fallback, init = {}) => {
+  const source = Object.prototype.hasOwnProperty.call(init, 'ic') ? init.ic : fallback
+  if (source === undefined || source === null) return { replicated: false }
+  if (typeof source !== 'object') throw new TypeError('ic fetch options must be an object')
+  if (!Object.prototype.hasOwnProperty.call(source, 'replicated')) return { replicated: false }
+  if (typeof source.replicated !== 'boolean') throw new TypeError('ic.replicated must be a boolean')
+  return { replicated: source.replicated }
+}
 
 class Headers {
   constructor(init = []) {
@@ -87,6 +95,7 @@ class Request {
     this.url = isRequest ? input.url : String(input)
     this.method = String(init.method || (isRequest ? input.method : 'GET')).toUpperCase()
     this.headers = init.headers ? new Headers(init.headers) : new Headers(isRequest ? input.headers : [])
+    this.ic = __ic_edge_normalize_ic_options(isRequest ? input.ic : undefined, init)
     if (isRequest && !hasBody && input.bodyUsed) throw new TypeError('Body has already been used')
     if ((this.method === 'GET' || this.method === 'HEAD') && hasBody && init.body !== null && init.body !== undefined) {
       throw new TypeError('Request with GET/HEAD method cannot have body')

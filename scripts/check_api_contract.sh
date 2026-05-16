@@ -32,14 +32,18 @@ for item in \
   EdgeRuntime \
   AsyncEdgeRuntime \
   AsyncHostFetch \
+  HostFetchOptions \
   CacheHost \
   QuickJsRuntime \
   CdkHttpRequest \
   CdkHttpResponse \
   handle_cdk_http \
   handle_cdk_http_async \
+  OutcallReplication \
   https_outcall_fetch \
+  https_outcall_fetch_with_replication \
   build_https_outcall_args \
+  build_https_outcall_args_with_replication \
   transform_strip_headers \
   "ic-edge init hono" \
   "ic-edge pack" \
@@ -50,6 +54,7 @@ for item in \
   abort_bundle_upload \
   runtime_history \
   rollback_runtime \
+  fetch_outcall_replicated \
   Streams \
   "full ESM loader" \
   "multipart"
@@ -61,7 +66,9 @@ for item in EdgeRuntime AsyncEdgeRuntime AsyncHostFetch CacheHost; do
   require_source "trait $item" "crates/ic-edge-runtime/src/lib.rs"
 done
 
-for item in CdkHttpRequest CdkHttpResponse handle_cdk_http handle_cdk_http_async https_outcall_fetch build_https_outcall_args transform_strip_headers; do
+require_source "struct HostFetchOptions" "crates/ic-edge-runtime/src/lib.rs"
+
+for item in CdkHttpRequest CdkHttpResponse handle_cdk_http handle_cdk_http_async OutcallReplication https_outcall_fetch https_outcall_fetch_with_replication build_https_outcall_args build_https_outcall_args_with_replication transform_strip_headers; do
   require_source "$item" "crates/ic-edge-canister/src/lib.rs"
 done
 

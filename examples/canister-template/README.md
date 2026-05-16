@@ -17,8 +17,9 @@ Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 - `env_names()`
 - `transform_strip_headers(args)`
 - `fetch_outcall(url)` controller-only direct HTTPS outcall smoke helper
+- `fetch_outcall_replicated(url)` controller-only replicated HTTPS outcall smoke helper
 
-`upload_bundle` は small/direct/debug 互換 API。CLI 標準経路は chunk upload。`upload_bundle`、chunk upload、`set_env`、`fetch_outcall` は controller 限定。`env_names` は secret 値を返さない。
+`upload_bundle` は small/direct/debug 互換 API。CLI 標準経路は chunk upload。`upload_bundle`、chunk upload、`set_env`、`fetch_outcall`、`fetch_outcall_replicated` は controller 限定。`env_names` は secret 値を返さない。
 
 ```bash
 icp network start -d

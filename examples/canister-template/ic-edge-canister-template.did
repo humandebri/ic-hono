@@ -57,5 +57,6 @@ service : {
   runtime_history : () -> (vec RuntimeSnapshotInfo) query;
   rollback_runtime : (nat64) -> (variant { Ok; Err : text });
   fetch_outcall : (text) -> (HttpResponse);
+  fetch_outcall_replicated : (text) -> (HttpResponse);
   transform_strip_headers : (TransformArgs) -> (HttpOutcallResponse) query;
 }

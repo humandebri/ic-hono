@@ -67,6 +67,16 @@ fn init_hono(directory: &Path) -> Result<String, String> {
 import { cors } from 'hono/cors'
 import { TrieRouter } from 'hono/router/trie-router'
 
+declare global {
+  interface RequestInit {
+    ic?: { replicated?: boolean }
+  }
+
+  interface Request {
+    ic?: { replicated: boolean }
+  }
+}
+
 const app = new Hono({ router: new TrieRouter() })
 
 app.use('*', cors())

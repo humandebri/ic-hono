@@ -18,7 +18,9 @@ use ic_cdk::management_canister::{HttpRequestResult, TransformArgs};
 use ic_edge_canister::handle_cdk_http;
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 use ic_edge_canister::handle_cdk_http_async;
-use ic_edge_canister::{https_outcall_fetch, CdkHttpRequest, CdkHttpResponse};
+use ic_edge_canister::{
+    https_outcall_fetch_with_replication, CdkHttpRequest, CdkHttpResponse, OutcallReplication,
+};
 #[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
 use ic_edge_runtime::EdgeRuntime;
 #[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
@@ -161,6 +163,18 @@ fn transform_strip_headers(args: TransformArgs) -> HttpRequestResult {
 }
 #[ic_cdk::update]
 async fn fetch_outcall(url: String) -> CdkHttpResponse {
+    fetch_outcall_with_replication(url, OutcallReplication::NonReplicated).await
+}
+
+#[ic_cdk::update]
+async fn fetch_outcall_replicated(url: String) -> CdkHttpResponse {
+    fetch_outcall_with_replication(url, OutcallReplication::Replicated).await
+}
+
+async fn fetch_outcall_with_replication(
+    url: String,
+    replication: OutcallReplication,
+) -> CdkHttpResponse {
     if let Err(error) = ensure_controller() {
         return forbidden_response(&error);
     }
@@ -169,10 +183,11 @@ async fn fetch_outcall(url: String) -> CdkHttpResponse {
         return error_response(error);
     }
     let request = Request::new("GET".to_string(), url, headers, Body::empty());
-    https_outcall_fetch(
+    https_outcall_fetch_with_replication(
         request,
         "transform_strip_headers",
         Some(limits::DEFAULT_FETCH_RESPONSE_BYTES),
+        replication,
     )
     .await
     .map(|response| ic_edge_canister::IcHttpResponse {

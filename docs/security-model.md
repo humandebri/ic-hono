@@ -8,7 +8,7 @@ User bundle は canister 内 QuickJS context で実行する。browser DOM、nat
 
 `upload_bundle(module, bytes)` と chunk upload API は controller 限定。`upload_bundle` は small/direct/debug 互換 API、CLI 標準経路は chunk upload。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。chunk upload は staging KV に保存し、`commit_bundle_upload(module)` 成功時だけ runtime module と generation を更新する。通信断などで staging KV が残っても、次回同一 module の `begin_bundle_upload` または direct `upload_bundle` が破棄する。
 
-`set_env(name, value)` と direct smoke 用 `fetch_outcall(url)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
+`set_env(name, value)` と direct smoke 用 `fetch_outcall(url)` / `fetch_outcall_replicated(url)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
 
 `scripts/icp_local_smoke.sh` は fresh deploy 後に `set_env("IC_EDGE_SMOKE", "ok")` が `Ok` を返し、後続 `env_names()` で `IC_EDGE_SMOKE` を確認する。
 
@@ -26,6 +26,8 @@ API key を bundle に埋め込まない。OpenAI / Upstash examples は `proces
 Inbound HTTP は HTTPS outcall を使わない。IC Gateway から `http_request` / `http_request_update` に入り、JS `Request` へ変換する。
 
 Outbound は JS `fetch("https://...")` のみ HTTPS outcall に接続する。plain HTTP、URL credentials、空 host、localhost、private / loopback / link-local / multicast / unspecified IP、metadata host は runtime 境界で拒否する。DNS 解決による private IP 判定は canister 内非決定性を避けるため行わない。
+
+HTTPS outcall は未指定で非複製。複製が必要な呼び出しは `fetch(url, { ic: { replicated: true } })` を使う。非複製は実験的で、複製 outcall より完全性保証が弱い。非冪等 POST は複製時だけでなく network retry でも duplicate request risk がある。
 
 ## Runtime Surface
 
