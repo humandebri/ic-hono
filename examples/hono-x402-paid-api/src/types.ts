@@ -46,8 +46,11 @@ export type PaidResult = {
 
 export type Receipt = {
   id: string
+  productId: string
   endpoint: string
   method: string
+  price: string
+  payTo: string
   paymentRequirementsHash: string
   paymentSignatureHash: string
   payerHash: string

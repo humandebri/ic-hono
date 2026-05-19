@@ -18,8 +18,9 @@ app.get('/audit/root', (c) => c.json(auditRoot()))
 app.get('/audit/events', async (c) => c.json({ events: await readAuditEvents() }))
 
 app.get('/demo/payment-signature', async (c) => {
-  const signature = await demoPaymentSignature()
-  if (!signature) return c.json({ error: 'demo signature is disabled when X402_FACILITATOR_URL is set' }, 409)
+  const endpoint = c.req.query('endpoint') || '/paid/report'
+  const signature = await demoPaymentSignature(endpoint)
+  if (!signature) return c.json({ error: 'demo signature is unavailable', endpoint }, 409)
   return c.json({ header: 'PAYMENT-SIGNATURE', value: signature })
 })
 

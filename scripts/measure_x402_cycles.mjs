@@ -46,8 +46,9 @@ async function getJson(path, init = {}) {
   return { status: response.status, headers: response.headers, body }
 }
 
-async function demoSignature() {
-  const response = await getJson('/demo/payment-signature')
+async function demoSignature(endpoint) {
+  const path = `/demo/payment-signature?endpoint=${encodeURIComponent(endpoint)}`
+  const response = await getJson(path)
   if (response.status !== 200 || typeof response.body.value !== 'string') {
     throw new Error(`failed to get demo signature: ${JSON.stringify(response)}`)
   }
@@ -164,14 +165,14 @@ await measure('GET /free/catalog', null, () => getJson('/free/catalog'), expectS
 await measure('GET /paid/report unpaid', null, () => getJson('/paid/report'), expectStatus(402))
 await measure(
   'GET /paid/report paid',
-  () => demoSignature(),
+  () => demoSignature('/paid/report'),
   (signature) => getJson('/paid/report', paidHeaders(signature)),
   expectPaid,
 )
 await measure(
   'GET /paid/report replay rejected',
   async () => {
-    const signature = await demoSignature()
+    const signature = await demoSignature('/paid/report')
     await getJson('/paid/report', paidHeaders(signature))
     return signature
   },
@@ -182,7 +183,7 @@ await measure('GET /receipts', null, () => getJson('/receipts'), expectStatus(20
 await measure('GET /audit/root', null, () => getJson('/audit/root'), expectStatus(200))
 await measure(
   'GET /paid/outcall paid replicated',
-  () => demoSignature(),
+  () => demoSignature('/paid/outcall'),
   (signature) => getJson('/paid/outcall?url=https%3A%2F%2Fexample.com%2F', paidHeaders(signature)),
   expectPaid,
 )

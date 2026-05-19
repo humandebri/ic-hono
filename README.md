@@ -150,17 +150,19 @@ Full suite app: `examples/hono-suite`, 119,560 bytes raw / 34,361 bytes gzip. It
 | direct `fetch_outcall` non-replicated | 3 | 746,832,512 | $0.000993 | $0.000993 | $0.000993 | $0.000993 |
 | direct `fetch_outcall_replicated` | 3 | 746,852,781 | $0.000993 | $0.000993 | $0.000993 | $0.000993 |
 
-x402 paid API app: `examples/hono-x402-paid-api`, 295,853 bytes raw / 55,229 bytes gzip. It includes official x402 V2 custom server flow, mock/HTTP facilitator switch, `ic.audit` receipt transparency log, replay rejection, payer hashing, and paid replicated HTTPS outcall.
+x402 paid API app: `examples/hono-x402-paid-api`, 298,651 bytes raw / 55,646 bytes gzip. It includes official x402 V2 custom server flow, endpoint-specific route catalog pricing, mock/HTTP facilitator switch, `ic.audit` receipt transparency log, replay rejection, payer hashing, and paid replicated HTTPS outcall.
+
+Route catalog defaults: `GET /paid/report` costs `$0.001` via `X402_REPORT_PRICE`; `GET /paid/outcall` costs `$0.003` via `X402_OUTCALL_PRICE`. Payee resolution is route env (`X402_REPORT_PAY_TO` / `X402_OUTCALL_PAY_TO`), then shared `X402_PAY_TO`, then the demo default.
 
 | Operation | Repeats | Median cycles | Median USD | Avg USD | Min USD | Max USD |
 |-----------|--------:|--------------:|-----------:|--------:|--------:|--------:|
-| `GET /free/catalog` | 3 | 35,224,816 | $0.000047 | $0.000160 | $0.000047 | $0.000387 |
-| `GET /paid/report` unpaid | 3 | 60,817,245 | $0.000081 | $0.000081 | $0.000081 | $0.000081 |
-| `GET /paid/report` paid | 3 | 144,257,763 | $0.000192 | $0.000192 | $0.000192 | $0.000193 |
-| `GET /paid/report` replay rejected | 3 | 101,106,583 | $0.000134 | $0.000134 | $0.000134 | $0.000135 |
-| `GET /receipts` | 3 | 223,752,264 | $0.000298 | $0.000298 | $0.000297 | $0.000298 |
-| `GET /audit/root` | 3 | 22,723,443 | $0.000030 | $0.000030 | $0.000030 | $0.000030 |
-| `GET /paid/outcall` paid replicated | 3 | 879,461,732 | $0.001170 | $0.001170 | $0.001169 | $0.001170 |
+| `GET /free/catalog` | 3 | 54,567,042 | $0.000073 | $0.000186 | $0.000073 | $0.000414 |
+| `GET /paid/report` unpaid | 3 | 62,867,345 | $0.000084 | $0.000084 | $0.000084 | $0.000084 |
+| `GET /paid/report` paid | 3 | 151,836,330 | $0.000202 | $0.000202 | $0.000201 | $0.000202 |
+| `GET /paid/report` replay rejected | 3 | 107,950,007 | $0.000144 | $0.000143 | $0.000143 | $0.000144 |
+| `GET /receipts` | 3 | 249,256,691 | $0.000332 | $0.000331 | $0.000331 | $0.000332 |
+| `GET /audit/root` | 3 | 22,812,779 | $0.000030 | $0.000030 | $0.000030 | $0.000030 |
+| `GET /paid/outcall` paid replicated | 3 | 886,849,413 | $0.001180 | $0.001179 | $0.001179 | $0.001180 |
 
 Cold and warm runtime calls are separated because generation changes invalidate the QuickJS runtime cache. Full historical samples are in [baseline local cycle evidence](docs/release-evidence/local-cycle-measurements-2026-05-16.md), [Hono suite local cycle evidence](docs/release-evidence/local-cycle-measurements-hono-suite-2026-05-16.md), and [Hono x402 paid API local cycle evidence](docs/release-evidence/local-cycle-measurements-hono-x402-paid-api-2026-05-19.md); those files may include pre-manifest raw upload measurements.
 

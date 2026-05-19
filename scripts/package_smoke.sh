@@ -123,6 +123,24 @@ grep -q '"digest":"' <<<"$suite_report" || {
   exit 1
 }
 
+x402_catalog="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET /free/catalog '')"
+grep -q '"endpoint":"/paid/report"' <<<"$x402_catalog" || {
+  echo "smoke failed: hono-x402 catalog missing report product" >&2
+  exit 1
+}
+grep -q '"price":"$0.001"' <<<"$x402_catalog" || {
+  echo "smoke failed: hono-x402 catalog missing report price" >&2
+  exit 1
+}
+grep -q '"endpoint":"/paid/outcall"' <<<"$x402_catalog" || {
+  echo "smoke failed: hono-x402 catalog missing outcall product" >&2
+  exit 1
+}
+grep -q '"price":"$0.003"' <<<"$x402_catalog" || {
+  echo "smoke failed: hono-x402 catalog missing outcall price" >&2
+  exit 1
+}
+
 x402_unpaid="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET /paid/report '' --show-response)"
 grep -q 'status: 402' <<<"$x402_unpaid" || {
   echo "smoke failed: hono-x402 unpaid request did not return 402" >&2
@@ -133,7 +151,7 @@ grep -q 'header: payment-required:' <<<"$x402_unpaid" || {
   exit 1
 }
 
-x402_signature_json="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET /demo/payment-signature '')"
+x402_signature_json="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET '/demo/payment-signature?endpoint=/paid/report' '')"
 x402_signature="$(node -e 'console.log(JSON.parse(process.argv[1]).value)' "$x402_signature_json")"
 x402_paid="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET /paid/report '' "PAYMENT-SIGNATURE: $x402_signature" --show-response)"
 grep -q 'status: 200' <<<"$x402_paid" || {
@@ -152,10 +170,42 @@ grep -q '"eventHash":"' <<<"$x402_paid" || {
   echo "smoke failed: hono-x402 paid response missing audit event hash" >&2
   exit 1
 }
+grep -q '"productId":"report"' <<<"$x402_paid" || {
+  echo "smoke failed: hono-x402 paid response missing report productId" >&2
+  exit 1
+}
+grep -q '"price":"$0.001"' <<<"$x402_paid" || {
+  echo "smoke failed: hono-x402 paid response missing report price" >&2
+  exit 1
+}
+grep -q '"payTo":"' <<<"$x402_paid" || {
+  echo "smoke failed: hono-x402 paid response missing payTo" >&2
+  exit 1
+}
 if grep -q '"payer":"demo-payer"' <<<"$x402_paid"; then
   echo "smoke failed: hono-x402 paid response leaked raw payer" >&2
   exit 1
 fi
+x402_wrong_outcall="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET /paid/outcall '' "PAYMENT-SIGNATURE: $x402_signature" --show-response)"
+grep -q 'status: 402' <<<"$x402_wrong_outcall" || {
+  echo "smoke failed: hono-x402 accepted report signature for outcall" >&2
+  exit 1
+}
+grep -q 'payment does not match requirements' <<<"$x402_wrong_outcall" || {
+  echo "smoke failed: hono-x402 wrong product signature did not explain mismatch" >&2
+  exit 1
+}
+x402_outcall_signature_json="$(cargo run -q -p ic-edge-runtime --example eval_bundle -- examples/hono-x402-paid-api/dist/app.bundle.js GET '/demo/payment-signature?endpoint=/paid/outcall' '')"
+x402_outcall_signature="$(node -e 'console.log(JSON.parse(process.argv[1]).value)' "$x402_outcall_signature_json")"
+x402_outcall_paid="$(cargo run -q -p ic-edge-runtime --example eval_bundle_fetch -- examples/hono-x402-paid-api/dist/app.bundle.js GET '/paid/outcall?url=https%3A%2F%2Fexample.com%2F' '' "PAYMENT-SIGNATURE: $x402_outcall_signature" --show-response)"
+grep -q 'status: 200' <<<"$x402_outcall_paid" || {
+  echo "smoke failed: hono-x402 outcall paid request did not return 200" >&2
+  exit 1
+}
+grep -q '"productId":"outcall"' <<<"$x402_outcall_paid" || {
+  echo "smoke failed: hono-x402 outcall paid response missing outcall productId" >&2
+  exit 1
+}
 
 fetch_ok="$(cargo run -q -p ic-edge-runtime --example eval_bundle_fetch -- examples/hono-fetch/dist/app.bundle.js)"
 expect "$fetch_ok" '{"url":"https://api.github.com"}' "hono-fetch host bridge"

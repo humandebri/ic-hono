@@ -4,7 +4,7 @@
 - environment: local
 - app entry: examples/hono-x402-paid-api/src/app.ts
 - bundle: examples/hono-x402-paid-api/dist/app.bundle.js
-- bundle size: 295,853 bytes raw / 55,229 bytes gzip
+- bundle size: 298,651 bytes raw / 55,646 bytes gzip
 - repeats: 3
 - date: 2026-05-19
 - delta: `before_cycles - after_cycles - idle_burn_elapsed`
@@ -13,17 +13,17 @@
 
 | operation | repeats | median cycles | median USD | avg cycles | avg USD | min | max | samples |
 |---|---:|---:|---:|---:|---:|---:|---:|---|
-| GET /free/catalog | 3 | 35,224,816 | $0.000047 | 120,570,806 | $0.000160 | 35,195,030 | 291,292,573 | 291,292,573, 35,195,030, 35,224,816 |
-| GET /paid/report unpaid | 3 | 60,817,245 | $0.000081 | 60,788,571 | $0.000081 | 60,715,854 | 60,832,616 | 60,715,854, 60,832,616, 60,817,245 |
-| GET /paid/report paid | 3 | 144,257,763 | $0.000192 | 144,346,364 | $0.000192 | 143,995,489 | 144,785,842 | 143,995,489, 144,257,763, 144,785,842 |
-| GET /paid/report replay rejected | 3 | 101,106,583 | $0.000134 | 101,109,023 | $0.000134 | 101,020,206 | 101,200,280 | 101,106,583, 101,020,206, 101,200,280 |
-| GET /receipts | 3 | 223,752,264 | $0.000298 | 223,783,211 | $0.000298 | 223,588,141 | 224,009,230 | 223,588,141, 223,752,264, 224,009,230 |
-| GET /audit/root | 3 | 22,723,443 | $0.000030 | 22,774,739 | $0.000030 | 22,711,272 | 22,889,502 | 22,711,272, 22,889,502, 22,723,443 |
-| GET /paid/outcall paid replicated | 3 | 879,461,732 | $0.001170 | 879,397,580 | $0.001170 | 879,247,569 | 879,483,441 | 879,461,732, 879,483,441, 879,247,569 |
+| GET /free/catalog | 3 | 54,567,042 | $0.000073 | 140,093,760 | $0.000186 | 54,556,086 | 311,158,154 | 311,158,154, 54,567,042, 54,556,086 |
+| GET /paid/report unpaid | 3 | 62,867,345 | $0.000084 | 62,938,606 | $0.000084 | 62,860,442 | 63,088,033 | 63,088,033, 62,860,442, 62,867,345 |
+| GET /paid/report paid | 3 | 151,836,330 | $0.000202 | 151,833,451 | $0.000202 | 151,466,429 | 152,197,594 | 151,466,429, 151,836,330, 152,197,594 |
+| GET /paid/report replay rejected | 3 | 107,950,007 | $0.000144 | 107,882,487 | $0.000143 | 107,721,262 | 107,976,193 | 107,721,262, 107,976,193, 107,950,007 |
+| GET /receipts | 3 | 249,256,691 | $0.000332 | 249,234,947 | $0.000331 | 249,074,984 | 249,373,167 | 249,074,984, 249,256,691, 249,373,167 |
+| GET /audit/root | 3 | 22,812,779 | $0.000030 | 22,812,205 | $0.000030 | 22,796,464 | 22,827,372 | 22,796,464, 22,812,779, 22,827,372 |
+| GET /paid/outcall paid replicated | 3 | 886,849,413 | $0.001180 | 886,830,084 | $0.001179 | 886,709,817 | 886,931,024 | 886,931,024, 886,849,413, 886,709,817 |
 
 Notes:
 
 - Measurement script: `scripts/measure_x402_cycles.mjs`.
 - The canister was reinstalled before measurement to start with an empty audit log.
-- Paid operation setup requests `/demo/payment-signature` before each measured paid call; setup cost is excluded.
+- Paid operation setup requests `/demo/payment-signature?endpoint=...` before each measured paid call; setup cost is excluded.
 - The first `/free/catalog` sample includes runtime cold-start effects and explains the higher average.

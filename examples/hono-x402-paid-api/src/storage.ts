@@ -71,8 +71,11 @@ function isReceipt(value: unknown): value is Receipt {
   if (!isRecord(value)) return false
   return (
     typeof value.id === 'string' &&
+    typeof value.productId === 'string' &&
     typeof value.endpoint === 'string' &&
     typeof value.method === 'string' &&
+    typeof value.price === 'string' &&
+    typeof value.payTo === 'string' &&
     typeof value.paymentRequirementsHash === 'string' &&
     typeof value.paymentSignatureHash === 'string' &&
     typeof value.payerHash === 'string' &&
