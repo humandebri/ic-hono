@@ -34,11 +34,13 @@ type HttpOutcallResponse = record {
 type RuntimeInfo = record {
   backend : text;
   generation : nat64;
+  bundle_sha256 : opt text;
 };
 
 type RuntimeSnapshotInfo = record {
   generation : nat64;
   bundle_bytes : nat64;
+  manifest_bytes : nat64;
   env_names : vec text;
 };
 
@@ -46,7 +48,7 @@ service : {
   http_request : (HttpRequest) -> (HttpResponse) query;
   http_request_update : (HttpRequest) -> (HttpResponse);
   upload_bundle : (text, blob) -> (variant { Ok; Err : text });
-  begin_bundle_upload : (text, nat64) -> (variant { Ok; Err : text });
+  begin_bundle_upload : (text, nat64, text) -> (variant { Ok; Err : text });
   append_bundle_chunk : (text, nat64, blob) -> (variant { Ok; Err : text });
   commit_bundle_upload : (text) -> (variant { Ok; Err : text });
   abort_bundle_upload : (text) -> (variant { Ok; Err : text });

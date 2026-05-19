@@ -102,13 +102,67 @@ cargo run -p ic-edge-pack --bin ic-edge -- upload \
 
 v1 preview targets a Worker-compatible Core+Cache subset, not a full Cloudflare Workers implementation. Streams, DOM, Node core modules, and managed platform bindings are unsupported.
 
-Host smoke is green for Hono basic routes, JSON echo, params/query, CORS, zod, Cache API subset, JS fetch host bridge, OpenAI non-streaming mock bridge, and Upstash mock bridge.
+Host smoke is green for Hono basic routes, JSON echo, params/query, CORS, zod, Cache API subset, JS fetch host bridge, OpenAI non-streaming mock bridge, Upstash mock bridge, and x402 V2 paid API mock flow.
 
 Canister backend is quickjs-ic only: `wasm32-wasip1` build, WASI import stubbing, then `wasi2ic`. Local canister smoke covers chunked bundle upload, direct update, Gateway, HTTPS outcall, stable Cache, runtime generation cache, and rollback.
 
 Cache API is canister-local stable storage, not a CDN cache. It supports `caches.default`, `caches.open`, `match`, `put`, `delete`, and `Cache-Control: max-age=N` expiration; `Set-Cookie` responses, Range, and conditional request behavior are out of scope for v1 preview.
 
 Runtime limits are fixed: bundle 2 MiB, bundle upload chunk 512 KiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, cache name 128 bytes, cache key 2 KiB, cache index 1024 entries / 128 KiB JSON, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
+
+## Local Cycle Measurements
+
+Local cycle measurements use `icp canister status edge --environment local` before and after each update call, then subtract elapsed idle burn from `Idle cycles burned per day`. Query calls are excluded because this method measures canister balance debit. HTTP routes are measured through `http_request_update`, not the Gateway.
+
+These numbers are local PocketIC measurements, not mainnet pricing. USD assumes `1T cycles = $1.33`.
+
+Baseline app: `examples/hono-status`, 33,885 bytes raw / 13,125 bytes gzip.
+
+| Operation | Repeats | Median cycles | Median USD | Avg USD | Min USD | Max USD |
+|-----------|--------:|--------------:|-----------:|--------:|--------:|--------:|
+| `abort_bundle_upload` missing | 5 | 9,145,219 | $0.000012 | $0.000012 | $0.000012 | $0.000012 |
+| `set_env` replace 16B | 5 | 23,729,077 | $0.000032 | $0.000031 | $0.000030 | $0.000032 |
+| `GET /api/health` cold after generation change | 3 | 106,426,761 | $0.000142 | $0.000142 | $0.000141 | $0.000142 |
+| `GET /api/health` warm | 5 | 32,672,020 | $0.000043 | $0.000043 | $0.000043 | $0.000043 |
+| `GET /api/incidents` | 5 | 38,896,393 | $0.000052 | $0.000052 | $0.000052 | $0.000052 |
+| `GET /` HTML page | 5 | 158,018,986 | $0.000210 | $0.000210 | $0.000210 | $0.000211 |
+| `GET /demo` Cache write | 5 | 47,080,866 | $0.000063 | $0.000063 | $0.000062 | $0.000063 |
+| `POST /api/incidents` | 5 | 51,961,241 | $0.000069 | $0.000069 | $0.000069 | $0.000069 |
+| `POST /api/incidents/:id/resolve` | 5 | 148,102,636 | $0.000197 | $0.000197 | $0.000197 | $0.000197 |
+| `GET /api/check` warm + replicated fetch | 3 | 769,365,170 | $0.001023 | $0.001023 | $0.001023 | $0.001023 |
+| direct `fetch_outcall` non-replicated | 3 | 746,783,624 | $0.000993 | $0.000993 | $0.000993 | $0.000993 |
+| direct `fetch_outcall_replicated` | 3 | 746,808,084 | $0.000993 | $0.000993 | $0.000993 | $0.000993 |
+
+Full suite app: `examples/hono-suite`, 119,560 bytes raw / 34,361 bytes gzip. It includes Hono middleware, zod validation, jose HS256 JWT sign/verify, Web Crypto SHA-256, Cache API state, audit log storage, SSR HTML, and replicated HTTPS fetch.
+
+| Operation | Repeats | Median cycles | Median USD | Avg USD | Min USD | Max USD |
+|-----------|--------:|--------------:|-----------:|--------:|--------:|--------:|
+| `abort_bundle_upload` missing | 5 | 9,103,351 | $0.000012 | $0.000012 | $0.000012 | $0.000012 |
+| `set_env` replace 16B | 5 | 75,606,532 | $0.000101 | $0.000091 | $0.000068 | $0.000101 |
+| `GET /api/health` cold after generation change | 3 | 240,354,320 | $0.000320 | $0.000320 | $0.000319 | $0.000320 |
+| `GET /api/health` warm | 5 | 45,929,244 | $0.000061 | $0.000061 | $0.000061 | $0.000061 |
+| `GET /api/incidents` | 5 | 40,993,993 | $0.000055 | $0.000055 | $0.000054 | $0.000055 |
+| `GET /` HTML page | 5 | 205,158,959 | $0.000273 | $0.000273 | $0.000270 | $0.000276 |
+| `GET /demo` Cache write | 5 | 110,508,840 | $0.000147 | $0.000147 | $0.000136 | $0.000158 |
+| `POST /api/incidents` | 5 | 149,243,137 | $0.000198 | $0.000199 | $0.000176 | $0.000221 |
+| `POST /api/incidents/:id/resolve` | 5 | 595,254,814 | $0.000792 | $0.000792 | $0.000686 | $0.000899 |
+| `GET /api/check` warm + replicated fetch | 3 | 954,397,936 | $0.001269 | $0.001269 | $0.001264 | $0.001275 |
+| direct `fetch_outcall` non-replicated | 3 | 746,832,512 | $0.000993 | $0.000993 | $0.000993 | $0.000993 |
+| direct `fetch_outcall_replicated` | 3 | 746,852,781 | $0.000993 | $0.000993 | $0.000993 | $0.000993 |
+
+x402 paid API app: `examples/hono-x402-paid-api`, 295,853 bytes raw / 55,229 bytes gzip. It includes official x402 V2 custom server flow, mock/HTTP facilitator switch, `ic.audit` receipt transparency log, replay rejection, payer hashing, and paid replicated HTTPS outcall.
+
+| Operation | Repeats | Median cycles | Median USD | Avg USD | Min USD | Max USD |
+|-----------|--------:|--------------:|-----------:|--------:|--------:|--------:|
+| `GET /free/catalog` | 3 | 35,224,816 | $0.000047 | $0.000160 | $0.000047 | $0.000387 |
+| `GET /paid/report` unpaid | 3 | 60,817,245 | $0.000081 | $0.000081 | $0.000081 | $0.000081 |
+| `GET /paid/report` paid | 3 | 144,257,763 | $0.000192 | $0.000192 | $0.000192 | $0.000193 |
+| `GET /paid/report` replay rejected | 3 | 101,106,583 | $0.000134 | $0.000134 | $0.000134 | $0.000135 |
+| `GET /receipts` | 3 | 223,752,264 | $0.000298 | $0.000298 | $0.000297 | $0.000298 |
+| `GET /audit/root` | 3 | 22,723,443 | $0.000030 | $0.000030 | $0.000030 | $0.000030 |
+| `GET /paid/outcall` paid replicated | 3 | 879,461,732 | $0.001170 | $0.001170 | $0.001169 | $0.001170 |
+
+Cold and warm runtime calls are separated because generation changes invalidate the QuickJS runtime cache. Full historical samples are in [baseline local cycle evidence](docs/release-evidence/local-cycle-measurements-2026-05-16.md), [Hono suite local cycle evidence](docs/release-evidence/local-cycle-measurements-hono-suite-2026-05-16.md), and [Hono x402 paid API local cycle evidence](docs/release-evidence/local-cycle-measurements-hono-x402-paid-api-2026-05-19.md); those files may include pre-manifest raw upload measurements.
 
 ## Release Gates
 

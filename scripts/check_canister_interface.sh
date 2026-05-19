@@ -77,4 +77,14 @@ grep -q 'generation : nat64' "$DID" || {
   exit 1
 }
 
+grep -q 'bundle_sha256 : opt text' "$DID" || {
+  echo "RuntimeInfo must expose bundle_sha256 : opt text" >&2
+  exit 1
+}
+
+grep -q 'begin_bundle_upload : (text, nat64, text)' "$DID" || {
+  echo "begin_bundle_upload must require manifest_json" >&2
+  exit 1
+}
+
 echo "canister interface check passed"

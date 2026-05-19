@@ -1,6 +1,7 @@
 //! `examples/canister-template` shows the intended IC HTTP endpoint shape.
 //! Uploaded bundles are evaluated by the runtime when handling HTTP requests.
 
+mod audit_support;
 mod cache_support;
 mod env_support;
 mod history_support;
@@ -29,10 +30,14 @@ use ic_edge_store::{EdgeStore, StableEdgeStore};
 use ic_edge_web::{limits, Body, Headers, Request};
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 use runtime_cache::{store_runtime, take_runtime};
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
 const GENERATION_KEY: &str = "__runtime_generation";
+const MODULE_MANIFEST_PREFIX: &str = "__module_manifest:";
 const UPLOAD_BYTES_PREFIX: &str = "__upload_bytes:";
+const UPLOAD_MANIFEST_PREFIX: &str = "__upload_manifest:";
 const UPLOAD_TOTAL_PREFIX: &str = "__upload_total:";
 
 thread_local! {
@@ -43,6 +48,13 @@ thread_local! {
 struct RuntimeInfo {
     backend: String,
     generation: u64,
+    bundle_sha256: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UploadManifest {
+    schema_version: u8,
+    bundle_sha256: String,
 }
 
 #[ic_cdk::query]
@@ -74,11 +86,17 @@ fn upload_bundle(module: String, bytes: Vec<u8>) -> Result<(), String> {
 }
 
 #[ic_cdk::update]
-fn begin_bundle_upload(module: String, total_bytes: u64) -> Result<(), String> {
+fn begin_bundle_upload(
+    module: String,
+    total_bytes: u64,
+    manifest_json: String,
+) -> Result<(), String> {
     ensure_controller()?;
     let total_bytes = usize::try_from(total_bytes)
         .map_err(|_| "bundle size does not fit this canister".to_string())?;
-    STORE.with_borrow_mut(|store| begin_bundle_upload_in_store(store, &module, total_bytes))
+    STORE.with_borrow_mut(|store| {
+        begin_bundle_upload_in_store(store, &module, total_bytes, &manifest_json)
+    })
 }
 
 #[ic_cdk::update]
@@ -146,6 +164,7 @@ fn runtime_info() -> RuntimeInfo {
     RuntimeInfo {
         backend: runtime_backend().to_string(),
         generation: STORE.with_borrow(read_generation),
+        bundle_sha256: STORE.with_borrow(|store| read_bundle_sha256(store, "app")),
     }
 }
 #[ic_cdk::query]
@@ -320,27 +339,27 @@ fn upload_bundle_in_store(
     module: &str,
     bytes: &[u8],
 ) -> Result<(), String> {
-    if bytes.len() > limits::MAX_BUNDLE_BYTES {
-        return Err("bundle exceeds v1 limit".to_string());
-    }
-    store
-        .put_module(module, bytes)
-        .map_err(|error| format!("{error:?}"))?;
-    abort_bundle_upload_in_store(store, module)?;
-    let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
-    history_support::record_snapshot(store, generation)
+    let _ = store;
+    let _ = module;
+    let _ = bytes;
+    Err("manifest is required".to_string())
 }
 
 fn begin_bundle_upload_in_store(
     store: &mut StableEdgeStore,
     module: &str,
     total_bytes: usize,
+    manifest_json: &str,
 ) -> Result<(), String> {
     if total_bytes > limits::MAX_BUNDLE_BYTES {
         return Err("bundle exceeds v1 limit".to_string());
     }
+    validate_manifest_json(manifest_json)?;
     store
         .put_kv(&upload_bytes_key(module), &[])
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .put_kv(&upload_manifest_key(module), manifest_json.as_bytes())
         .map_err(|error| format!("{error:?}"))?;
     store
         .put_kv(
@@ -376,11 +395,19 @@ fn append_bundle_chunk_in_store(
 fn commit_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
     let total = read_upload_total(store, module)?;
     let staged = read_upload_bytes(store, module)?;
+    let manifest_json = read_upload_manifest(store, module)?;
+    let manifest = validate_manifest_json(&manifest_json)?;
     if staged.len() != total {
         return Err("bundle upload is incomplete".to_string());
     }
+    if sha256_hex(&staged) != manifest.bundle_sha256 {
+        return Err("bundle sha256 does not match manifest".to_string());
+    }
     store
         .put_module(module, &staged)
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .put_kv(&module_manifest_key(module), manifest_json.as_bytes())
         .map_err(|error| format!("{error:?}"))?;
     abort_bundle_upload_in_store(store, module)?;
     let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
@@ -390,6 +417,9 @@ fn commit_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> R
 fn abort_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
     store
         .delete_kv(&upload_bytes_key(module))
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .delete_kv(&upload_manifest_key(module))
         .map_err(|error| format!("{error:?}"))?;
     store
         .delete_kv(&upload_total_key(module))
@@ -412,8 +442,75 @@ fn read_upload_bytes(store: &StableEdgeStore, module: &str) -> Result<Vec<u8>, S
         .ok_or_else(|| "bundle upload has not started".to_string())
 }
 
+fn read_upload_manifest(store: &StableEdgeStore, module: &str) -> Result<String, String> {
+    let bytes = store
+        .get_kv(&upload_manifest_key(module))
+        .map_err(|error| format!("{error:?}"))?
+        .ok_or_else(|| "bundle upload has not started".to_string())?;
+    String::from_utf8(bytes).map_err(|error| error.to_string())
+}
+
+fn validate_manifest_json(manifest_json: &str) -> Result<UploadManifest, String> {
+    let manifest: UploadManifest =
+        serde_json::from_str(manifest_json).map_err(|error| error.to_string())?;
+    if manifest.schema_version != 1 {
+        return Err("unsupported manifest schema_version".to_string());
+    }
+    if manifest.bundle_sha256.len() != 64
+        || !manifest
+            .bundle_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("manifest bundle_sha256 must be lowercase sha256 hex".to_string());
+    }
+    Ok(manifest)
+}
+
+fn read_bundle_sha256(store: &StableEdgeStore, module: &str) -> Option<String> {
+    let bytes = store.get_kv(&module_manifest_key(module)).ok().flatten()?;
+    let manifest: UploadManifest = serde_json::from_slice(&bytes).ok()?;
+    Some(manifest.bundle_sha256)
+}
+
+pub(crate) fn read_module_manifest(store: &StableEdgeStore, module: &str) -> Vec<u8> {
+    store
+        .get_kv(&module_manifest_key(module))
+        .ok()
+        .flatten()
+        .unwrap_or_default()
+}
+
+pub(crate) fn put_module_manifest(
+    store: &mut StableEdgeStore,
+    module: &str,
+    manifest: &[u8],
+) -> Result<(), String> {
+    if manifest.is_empty() {
+        return store
+            .delete_kv(&module_manifest_key(module))
+            .map_err(|error| format!("{error:?}"));
+    }
+    store
+        .put_kv(&module_manifest_key(module), manifest)
+        .map_err(|error| format!("{error:?}"))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn module_manifest_key(module: &str) -> String {
+    format!("{MODULE_MANIFEST_PREFIX}{}:{module}", module.len())
+}
+
 fn upload_bytes_key(module: &str) -> String {
     format!("{UPLOAD_BYTES_PREFIX}{}:{module}", module.len())
+}
+
+fn upload_manifest_key(module: &str) -> String {
+    format!("{UPLOAD_MANIFEST_PREFIX}{}:{module}", module.len())
 }
 
 fn upload_total_key(module: &str) -> String {

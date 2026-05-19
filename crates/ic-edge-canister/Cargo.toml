@@ -20,5 +20,8 @@ ic-edge-web = { version = "0.2.0", path = "../ic-edge-web" }
 serde = { version = "1.0", features = ["derive"] }
 url = "2"
 
+[dev-dependencies]
+proptest = { version = "1.10", default-features = false, features = ["std"] }
+
 [lib]
 path = "src/lib.rs"

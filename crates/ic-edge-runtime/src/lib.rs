@@ -1,6 +1,8 @@
 //! `crates/ic-edge-runtime` owns app execution.
 //! The current interface lets the canister host call a future QuickJS-backed app.
 
+#[cfg(any(not(target_arch = "wasm32"), feature = "quickjs-ic"))]
+mod audit_polyfill;
 #[cfg(not(target_arch = "wasm32"))]
 mod crypto_host;
 #[cfg(any(not(target_arch = "wasm32"), feature = "quickjs-ic"))]
@@ -12,9 +14,15 @@ mod json_polyfill;
 #[cfg(not(target_arch = "wasm32"))]
 mod quickjs;
 #[cfg(not(target_arch = "wasm32"))]
+mod quickjs_audit_host;
+#[cfg(not(target_arch = "wasm32"))]
 mod quickjs_cache_host;
+#[cfg(not(target_arch = "wasm32"))]
+mod quickjs_host_types;
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 mod quickjs_wasm;
+#[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
+mod quickjs_wasm_audit;
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 mod quickjs_wasm_cache;
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
@@ -95,6 +103,22 @@ pub trait CacheHost {
     fn put_entry(&mut self, cache_name: &str, key: &str, response_json: &str) -> Result<()>;
     /// Deletes a cached response.
     fn delete_entry(&mut self, cache_name: &str, key: &str) -> Result<bool>;
+}
+
+/// Persistence boundary backing append-only public audit events.
+pub trait AuditHost {
+    /// Reserves an id before external work starts.
+    fn reserve(&mut self, id: &str, payload_json: &str) -> Result<String>;
+    /// Commits the successful final event for a reserved id.
+    fn commit(&mut self, id: &str, payload_json: &str) -> Result<String>;
+    /// Records a failed final event for a reserved id.
+    fn fail(&mut self, id: &str, payload_json: &str) -> Result<String>;
+    /// Reads the latest event for an id.
+    fn get(&mut self, id: &str) -> Result<Option<String>>;
+    /// Lists events in append order.
+    fn list(&mut self, offset: u64, limit: u64) -> Result<String>;
+    /// Reads the current audit root.
+    fn root(&mut self) -> Result<String>;
 }
 
 /// Minimal test runtime used by canister bridge unit tests.

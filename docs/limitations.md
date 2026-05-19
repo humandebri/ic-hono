@@ -41,9 +41,9 @@ v1 preview Worker互換 Core+Cache runtime の制約。crate semver は `0.2.0`�
 - `fetch_outcall(url)` update endpoint は controller-only smoke helper として HTTPS outcalls adapter に接続済み。
 - canister 内 JS `fetch()` から HTTPS outcalls adapter への実配線は `http_request_update` の async 経路で実装済み。
 - stable memory-backed store は `ic-stable-structures` 実装済み。
-- local memory store、stable memory store、`ic-edge upload`、canister small/direct `upload_bundle` 入口、chunk upload 経路は実装済み。
+- local memory store、stable memory store、manifest 必須 `ic-edge upload`、chunk upload 経路は実装済み。`upload_bundle` raw upload は拒否する。
 - upgrade hooks は未実装。現行 smoke は stable memory に保存した bundle / env が upgrade 後も読めることを確認する。
-- `runtime_history()` と `rollback_runtime()` は直近 5 世代の bundle/env snapshot を扱う。module は v1 では `app` を snapshot 対象にする。
+- `runtime_history()` と `rollback_runtime()` は直近 5 世代の bundle/env/manifest snapshot を扱う。module は v1 では `app` を snapshot 対象にする。
 
 ## Fixed Limits
 

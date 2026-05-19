@@ -46,15 +46,15 @@
     },
     {
       "requirement": "chunked bundle upload",
-      "evidence": "begin_bundle_upload, append_bundle_chunk, commit_bundle_upload, and abort_bundle_upload canister API plus canister-template unit tests and minified ic-edge upload smoke"
+      "evidence": "begin_bundle_upload, append_bundle_chunk, commit_bundle_upload, and abort_bundle_upload canister API plus canister-template unit tests and manifest ic-edge upload smoke"
     },
     {
       "requirement": "Hono package smoke",
-      "evidence": "scripts/package_smoke.sh checks minified Hono routes, numeric JSON, Uint8Array body, Cache roundtrip, zod, jose, fetch, OpenAI mock, Upstash mock"
+      "evidence": "scripts/package_smoke.sh checks manifest Hono routes, numeric JSON, Uint8Array body, Cache roundtrip, zod, jose, fetch, OpenAI mock, Upstash mock"
     },
     {
       "requirement": "local canister smoke",
-      "evidence": "scripts/icp_local_smoke.sh checks deploy, minified chunk upload, env, rollback, direct update, Gateway, HTTPS outcall, stable Cache, zod, fetch, jose"
+      "evidence": "scripts/icp_local_smoke.sh checks deploy, manifest chunk upload, env, rollback, direct update, Gateway, HTTPS outcall, stable Cache, zod, fetch, jose"
     },
     {
       "requirement": "canister interface consistency",

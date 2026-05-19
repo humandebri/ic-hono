@@ -2,7 +2,7 @@
 //! It keeps IC-specific bindings outside the QuickJS runtime.
 
 use candid::CandidType;
-#[cfg(not(test))]
+#[cfg(all(not(test), target_arch = "wasm32"))]
 use ic_cdk::management_canister::transform_context_from_query;
 use ic_cdk::management_canister::{
     http_request, HttpHeader, HttpMethod, HttpRequestArgs, HttpRequestResult, TransformArgs,
@@ -346,7 +346,7 @@ fn body_for_method(method: &str, body: Body) -> Option<Vec<u8>> {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(all(not(test), target_arch = "wasm32"))]
 fn transform_context(transform_name: &str) -> Option<TransformContext> {
     Some(transform_context_from_query(
         transform_name.to_string(),
@@ -354,7 +354,7 @@ fn transform_context(transform_name: &str) -> Option<TransformContext> {
     ))
 }
 
-#[cfg(test)]
+#[cfg(any(test, not(target_arch = "wasm32")))]
 fn transform_context(_transform_name: &str) -> Option<TransformContext> {
     None
 }

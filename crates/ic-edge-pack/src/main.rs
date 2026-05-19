@@ -1,7 +1,10 @@
 //! `crates/ic-edge-pack` provides the first CLI surface.
 //! It runs a local bundler and checks the runtime bundle contract.
 
-use ic_edge_pack::{default_out_file, manifest_for_request, upload_bundle, PackRequest};
+use ic_edge_pack::{
+    artifact_manifest, default_out_file, esbuild_args, manifest_for_request, upload_bundle,
+    verified_artifact_manifest, write_artifact_manifest, PackRequest,
+};
 use ic_edge_runtime::validate_bundle_contract as validate_runtime_bundle_contract;
 use ic_edge_store::{EdgeStore, MemoryEdgeStore};
 use ic_edge_web::limits;
@@ -129,8 +132,14 @@ fn pack_command(args: &[String]) -> Result<String, String> {
         entrypoint,
         out_file: out_file.to_string_lossy().to_string(),
     });
-    run_esbuild(&manifest.entrypoint, &manifest.bundle_path)?;
+    let esbuild_args = run_esbuild(&manifest.entrypoint, &manifest.bundle_path)?;
     validate_bundle_contract(&manifest.bundle_path)?;
+    let artifact = artifact_manifest(
+        &manifest.entrypoint,
+        Path::new(&manifest.bundle_path),
+        esbuild_args,
+    )?;
+    write_artifact_manifest(&artifact)?;
     Ok(format!("packed {}", manifest.bundle_path))
 }
 
@@ -139,12 +148,20 @@ fn upload_command(args: &[String]) -> Result<String, String> {
         .first()
         .ok_or_else(|| "missing bundle path".to_string())?;
     let module = parse_module(args)?.unwrap_or_else(|| "app".to_string());
+    let manifest = verified_artifact_manifest(Path::new(bundle_path))?;
+    validate_bundle_contract(bundle_path)?;
     let bytes = fs::read(bundle_path).map_err(|error| error.to_string())?;
     if bytes.len() > limits::MAX_BUNDLE_BYTES {
         return Err("bundle exceeds v1 limit".to_string());
     }
     if let Some(canister) = parse_canister(args)? {
-        upload_to_canister(&canister, parse_environment(args)?, &module, &bytes)?;
+        upload_to_canister(
+            &canister,
+            parse_environment(args)?,
+            &module,
+            &bytes,
+            &manifest,
+        )?;
         return Ok(format!(
             "uploaded {} bytes to canister {canister} module {module}",
             bytes.len()
@@ -164,12 +181,14 @@ fn upload_to_canister(
     environment: Option<String>,
     module: &str,
     bytes: &[u8],
+    manifest: &ic_edge_pack::BundleArtifactManifest,
 ) -> Result<(), String> {
+    let manifest_json = serde_json::to_string(manifest).map_err(|error| error.to_string())?;
     call_canister(
         canister,
         environment.as_deref(),
         "begin_bundle_upload",
-        &candid_begin_upload_argument(module, bytes.len())?,
+        &candid_begin_upload_argument(module, bytes.len(), &manifest_json)?,
     )?;
     let mut offset = 0usize;
     while offset < bytes.len() {
@@ -271,10 +290,14 @@ fn command_output_error(stdout: &[u8], stderr: &[u8]) -> String {
     "empty icp canister call response".to_string()
 }
 
-fn candid_begin_upload_argument(module: &str, total_bytes: usize) -> Result<String, String> {
+fn candid_begin_upload_argument(
+    module: &str,
+    total_bytes: usize,
+    manifest_json: &str,
+) -> Result<String, String> {
     let total =
         u64::try_from(total_bytes).map_err(|_| "bundle length does not fit nat64".to_string())?;
-    Ok(format!("({module:?}, {total} : nat64)"))
+    Ok(format!("({module:?}, {total} : nat64, {manifest_json:?})"))
 }
 
 fn candid_append_chunk_argument(
@@ -306,24 +329,15 @@ fn candid_blob(bytes: &[u8]) -> String {
     format!("blob \"{escaped}\"")
 }
 
-fn run_esbuild(entrypoint: &str, bundle_path: &str) -> Result<(), String> {
+fn run_esbuild(entrypoint: &str, bundle_path: &str) -> Result<Vec<String>, String> {
     let esbuild = find_esbuild(Path::new(entrypoint));
+    let args = esbuild_args(entrypoint, bundle_path);
     let output = Command::new(esbuild)
-        .args([
-            entrypoint,
-            "--bundle",
-            "--format=iife",
-            "--global-name=__ic_edge_bundle",
-            "--platform=neutral",
-            "--conditions=browser,worker,import",
-            "--target=es2018",
-            "--minify",
-            &format!("--outfile={bundle_path}"),
-        ])
+        .args(&args)
         .output()
         .map_err(|error| error.to_string())?;
     if output.status.success() {
-        Ok(())
+        Ok(args)
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
     }

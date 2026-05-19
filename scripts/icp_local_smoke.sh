@@ -67,8 +67,9 @@ upload_example() {
 pack_example() {
   local entry="$1"
   local out="$2"
-  echo "packing minified bundle: $entry -> $out"
-  cargo run -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
+  echo "packing bundle with manifest: $entry -> $out"
+  PATH="$ROOT/examples/hono-basic/node_modules/.bin:$PATH" \
+    cargo run -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
 }
 
 set_env_value() {
@@ -162,14 +163,14 @@ curl -fsS "${GATEWAY_URL%/}/cache-expired?canisterId=${CANISTER_ID}" | grep -qx 
 curl -fsS "${GATEWAY_URL%/}/time?canisterId=${CANISTER_ID}" | grep -Eq '^[0-9]+$'
 curl -fsSI "$BASE_URL" | grep -qi '^access-control-allow-origin:'
 
+binary_source="$LOG_DIR/binary-echo.ts"
 binary_bundle="$LOG_DIR/binary-echo.bundle.js"
-cat >"$binary_bundle" <<'JS'
-var __ic_edge_bundle = (() => ({
-  default: {
-    fetch: async (request) => new Response(new Uint8Array(await request.arrayBuffer()))
-  }
-}))();
+cat >"$binary_source" <<'JS'
+export default {
+  fetch: async (request) => new Response(new Uint8Array(await request.arrayBuffer()))
+}
 JS
+pack_example "$binary_source" "$binary_bundle"
 upload_example "$binary_bundle"
 expect_contains 'body = blob "\\ff\\00\\80"' call_update POST /binary '\ff\00\80'
 

@@ -36,6 +36,7 @@ Durable Edge Runtime on ICP v1 preview の文書索引。現行仕様はこの�
 - [Hono with jose](../examples/hono-jose/README.md): HS256 sign/verify。
 - [Hono with OpenAI](../examples/hono-openai/README.md): non-streaming OpenAI compatible request。
 - [Hono with Upstash Redis](../examples/hono-upstash/README.md): Upstash REST request。
+- [Hono x402 Paid API](../examples/hono-x402-paid-api/README.md): x402 V2 custom server pattern、paid API、receipt log。
 - [Hono with Zod](../examples/hono-zod/README.md): JSON validation。
 - [Canister Template](../examples/canister-template/README.md): upload、env、runtime info、rollback。
 

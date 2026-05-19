@@ -30,6 +30,7 @@ pub(super) fn take_runtime(
     let mut runtime = QuickJsRuntime::new()?;
     runtime.install_async_fetch(OutcallFetch);
     runtime.install_cache(crate::cache_support::StableCacheHost);
+    runtime.install_audit(crate::audit_support::StableAuditHost);
     runtime.eval_module("env", env_source)?;
     runtime.eval_module("app", app_source)?;
     Ok(runtime)

@@ -7,8 +7,8 @@ Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 
 - `http_request`
 - `http_request_update`
-- `upload_bundle(module, bytes)`
-- `begin_bundle_upload(module, total_bytes)`
+- `upload_bundle(module, bytes)` manifest なし raw upload reject stub
+- `begin_bundle_upload(module, total_bytes, manifest_json)`
 - `append_bundle_chunk(module, offset, bytes)`
 - `commit_bundle_upload(module)`
 - `abort_bundle_upload(module)`
@@ -19,7 +19,7 @@ Cookbook は [`docs/cookbook.md`](../../docs/cookbook.md) に集約する。
 - `fetch_outcall(url)` controller-only direct HTTPS outcall smoke helper
 - `fetch_outcall_replicated(url)` controller-only replicated HTTPS outcall smoke helper
 
-`upload_bundle` は small/direct/debug 互換 API。CLI 標準経路は chunk upload。`upload_bundle`、chunk upload、`set_env`、`fetch_outcall`、`fetch_outcall_replicated` は controller 限定。`env_names` は secret 値を返さない。
+`ic-edge upload` は manifest 付き chunk upload を使う。`upload_bundle` は manifest なし raw upload を拒否する。upload、`set_env`、`fetch_outcall`、`fetch_outcall_replicated` は controller 限定。`env_names` は secret 値を返さない。
 
 ```bash
 icp network start -d

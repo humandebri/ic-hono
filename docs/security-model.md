@@ -3,10 +3,11 @@
 ## Trust Boundary
 
 User bundle は canister 内 QuickJS context で実行する。browser DOM、native addon、canister 内 npm install は対象外。
+Uploaded bundle は trusted code として扱う。悪意ある bundle は `process.env` の secret を読み、許可された `fetch()` で外部送信できる。
 
 ## Bundle Upload
 
-`upload_bundle(module, bytes)` と chunk upload API は controller 限定。`upload_bundle` は small/direct/debug 互換 API、CLI 標準経路は chunk upload。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。chunk upload は staging KV に保存し、`commit_bundle_upload(module)` 成功時だけ runtime module と generation を更新する。通信断などで staging KV が残っても、次回同一 module の `begin_bundle_upload` または direct `upload_bundle` が破棄する。
+`upload_bundle(module, bytes)` は manifest なし raw upload として拒否する。chunk upload API は controller 限定で、`begin_bundle_upload(module, total_bytes, manifest_json)` に `ic-edge pack` 生成 manifest を必須とする。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。chunk upload は bundle bytes と manifest を staging KV に保存し、`commit_bundle_upload(module)` 成功時に staged bytes の sha256 と manifest `bundle_sha256` を照合してから runtime module と generation を更新する。
 
 `set_env(name, value)` と direct smoke 用 `fetch_outcall(url)` / `fetch_outcall_replicated(url)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
 
@@ -33,7 +34,7 @@ HTTPS outcall は未指定で非複製。複製が必要な呼び出しは `fetc
 
 公開 API は compatibility matrix に記録した subset のみ。Node core modules、filesystem、process mutation、DOM、streams full support は非対応。
 
-`http_request_update` は `raw_rand().await` 完了後に generation / bundle / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`upload_bundle()` / `commit_bundle_upload()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
+`http_request_update` は `raw_rand().await` 完了後に generation / bundle / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`commit_bundle_upload()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
 
 ## Cache
 
@@ -47,4 +48,4 @@ Cache 追加上限: name 128 bytes、key 2 KiB、index 1024 entries、index JSON
 
 ## Rollback
 
-`rollback_runtime(generation)` は controller 限定。直近 5 世代の bundle/env snapshot だけを復元対象にする。
+`rollback_runtime(generation)` は controller 限定。直近 5 世代の bundle/env/manifest snapshot だけを復元対象にする。

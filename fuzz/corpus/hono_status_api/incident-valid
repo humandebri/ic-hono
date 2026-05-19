@@ -1,0 +1,1 @@
+{"title":"Checkout API degraded","summary":"P95 latency is above target","status":"identified","severity":"critical"}

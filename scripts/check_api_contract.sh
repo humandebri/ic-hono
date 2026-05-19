@@ -34,6 +34,7 @@ for item in \
   AsyncHostFetch \
   HostFetchOptions \
   CacheHost \
+  AuditHost \
   QuickJsRuntime \
   CdkHttpRequest \
   CdkHttpResponse \
@@ -62,7 +63,7 @@ do
   require_contract "$item"
 done
 
-for item in EdgeRuntime AsyncEdgeRuntime AsyncHostFetch CacheHost; do
+for item in EdgeRuntime AsyncEdgeRuntime AsyncHostFetch CacheHost AuditHost; do
   require_source "trait $item" "crates/ic-edge-runtime/src/lib.rs"
 done
 

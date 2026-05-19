@@ -17,3 +17,6 @@ path = "src/lib.rs"
 
 [dependencies]
 ic-stable-structures = "0.7.2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
