@@ -656,6 +656,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-edge-bytecode-compiler"
+version = "0.2.0"
+dependencies = [
+ "quickjs-wasm-rs",
+]
+
+[[package]]
 name = "ic-edge-canister"
 version = "0.2.0"
 dependencies = [

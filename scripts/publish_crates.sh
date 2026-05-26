@@ -12,6 +12,7 @@ crates=(
   ic-edge-web
   ic-edge-loader
   ic-edge-store
+  ic-edge-bytecode-compiler
   ic-edge-runtime
   ic-edge-canister
   ic-edge-pack

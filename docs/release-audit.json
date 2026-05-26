@@ -45,8 +45,8 @@
       "evidence": "runtime_history and rollback_runtime canister API plus canister-template unit tests"
     },
     {
-      "requirement": "chunked bundle upload",
-      "evidence": "begin_bundle_upload, append_bundle_chunk, commit_bundle_upload, and abort_bundle_upload canister API plus canister-template unit tests and manifest ic-edge upload smoke"
+      "requirement": "chunked bytecode upload",
+      "evidence": "begin_bytecode_upload, append_bytecode_chunk, commit_bytecode_upload, and abort_bytecode_upload canister API plus canister-template unit tests and manifest ic-edge upload smoke"
     },
     {
       "requirement": "Hono package smoke",

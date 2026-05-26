@@ -17,7 +17,7 @@ Supported in v1 preview:
 - `fetch()` through ICP HTTPS outcalls
 - `crypto.getRandomValues` and SHA-256 / HMAC-SHA-256 `crypto.subtle` subset
 - canister-local stable Cache API subset
-- stable bundle/env storage and runtime rollback
+- stable bytecode/env storage and runtime rollback
 
 Not supported in v1 preview:
 
@@ -67,6 +67,7 @@ Prerequisites:
 - Rust toolchain with `wasm32-wasip1`
 - `icp` CLI
 - `wasi2ic`
+- `wasmtime` CLI for local QuickJS bytecode compilation
 - Node.js / npm for example bundle builds
 - network access for the first `quickjs-wasm-sys` WASI SDK fetch, or `QUICKJS_WASM_SYS_WASI_SDK_PATH` pointing at a local WASI SDK
 
@@ -93,7 +94,7 @@ Local ICP flow:
 icp network start -d
 icp deploy edge --yes
 cargo run -p ic-edge-pack --bin ic-edge -- upload \
-  examples/hono-basic/dist/app.bundle.js \
+  examples/hono-basic/dist/app.qjbc \
   --canister edge \
   --environment local
 ```
@@ -104,11 +105,11 @@ v1 preview targets a Worker-compatible Core+Cache subset, not a full Cloudflare 
 
 Host smoke is green for Hono basic routes, JSON echo, params/query, CORS, zod, Cache API subset, JS fetch host bridge, OpenAI non-streaming mock bridge, Upstash mock bridge, and x402 V2 paid API mock flow.
 
-Canister backend is quickjs-ic only: `wasm32-wasip1` build, WASI import stubbing, then `wasi2ic`. Local canister smoke covers chunked bundle upload, direct update, Gateway, HTTPS outcall, stable Cache, runtime generation cache, and rollback.
+Canister backend is quickjs-ic only: `wasm32-wasip1` build, WASI import stubbing, then `wasi2ic`. Local canister smoke covers chunked bytecode upload, direct update, Gateway, HTTPS outcall, stable Cache, runtime generation cache, and rollback.
 
 Cache API is canister-local stable storage, not a CDN cache. It supports `caches.default`, `caches.open`, `match`, `put`, `delete`, and `Cache-Control: max-age=N` expiration; `Set-Cookie` responses, Range, and conditional request behavior are out of scope for v1 preview.
 
-Runtime limits are fixed: bundle 2 MiB, bundle upload chunk 512 KiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, cache name 128 bytes, cache key 2 KiB, cache index 1024 entries / 128 KiB JSON, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
+Runtime limits are fixed: bytecode 2 MiB, bytecode upload chunk 512 KiB, inbound body 1 MiB, JS response body 1 MiB, cache entry 256 KiB, cache total 4 MiB, cache name 128 bytes, cache key 2 KiB, cache index 1024 entries / 128 KiB JSON, fetch response default 64 KiB / max 2 MiB, request fetch count 16, runtime history 5 generations, env names 64, env value 16 KiB.
 
 ## Local Cycle Measurements
 

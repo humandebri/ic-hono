@@ -8,6 +8,7 @@ crates=(
   ic-edge-web
   ic-edge-loader
   ic-edge-store
+  ic-edge-bytecode-compiler
   ic-edge-runtime
   ic-edge-canister
   ic-edge-pack
@@ -17,6 +18,7 @@ publish_ready_crates=(
   ic-edge-web
   ic-edge-loader
   ic-edge-store
+  ic-edge-bytecode-compiler
 )
 
 dependent_crates=(
@@ -24,6 +26,8 @@ dependent_crates=(
   ic-edge-canister
   ic-edge-pack
 )
+
+scripts/check_bytecode_compiler_asset.sh
 
 cargo fmt --all --check
 cargo test
@@ -36,6 +40,9 @@ done
 for crate in "${dependent_crates[@]}"; do
   cargo package -p "$crate" --list --allow-dirty >/dev/null
 done
+
+cargo package -p ic-edge-pack --list --allow-dirty \
+  | grep -q 'assets/ic-edge-bytecode-compiler.wasm'
 
 for crate in "${publish_ready_crates[@]}"; do
   cargo publish -p "$crate" --dry-run --allow-dirty

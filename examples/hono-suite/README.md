@@ -7,5 +7,5 @@ It combines SSR HTML, JSON APIs, zod validation, jose JWT signing and verificati
 ```bash
 npm install
 npm run build
-cargo run -p ic-edge-pack --bin ic-edge -- upload dist/app.bundle.js --canister edge --environment local
+cargo run -p ic-edge-pack --bin ic-edge -- upload dist/app.qjbc --canister edge --environment local
 ```

@@ -12,8 +12,12 @@ test -f "$init_tmp/src/app.ts" || {
   exit 1
 }
 
-pack_tmp="/tmp/ic-edge-pack-basic.js"
+pack_tmp="/tmp/ic-edge-pack-basic.bundle.js"
 cargo run -q -p ic-edge-pack --bin ic-edge -- pack examples/hono-basic/src/app.ts --out "$pack_tmp" >/dev/null
+test -f /tmp/ic-edge-pack-basic.qjbc || {
+  echo "smoke failed: bytecode missing for $pack_tmp" >&2
+  exit 1
+}
 
 (
   cd examples/hono-fetch
@@ -33,13 +37,18 @@ for entry in \
 do
   example_dir="$(dirname "$(dirname "$entry")")"
   out="$example_dir/dist/app.bundle.js"
+  bytecode="$example_dir/dist/app.qjbc"
   cargo run -q -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
   test -f "$out.map" || {
     echo "smoke failed: source map missing for $out" >&2
     exit 1
   }
-  test -f "$out.ic-edge-manifest.json" || {
-    echo "smoke failed: manifest missing for $out" >&2
+  test -f "$bytecode" || {
+    echo "smoke failed: bytecode missing for $bytecode" >&2
+    exit 1
+  }
+  test -f "$bytecode.ic-edge-manifest.json" || {
+    echo "smoke failed: manifest missing for $bytecode" >&2
     exit 1
   }
 done

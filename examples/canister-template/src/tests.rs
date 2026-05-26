@@ -2,9 +2,9 @@
 //! Tests keep endpoint and rollback checks out of the production module.
 
 use super::{
-    abort_bundle_upload_in_store, append_bundle_chunk_in_store, begin_bundle_upload_in_store,
-    bump_generation, commit_bundle_upload_in_store, history_support, http_request, read_generation,
-    read_module_manifest, sha256_hex, upload_bundle_in_store,
+    abort_bytecode_upload_in_store, append_bytecode_chunk_in_store, begin_bytecode_upload_in_store,
+    bump_generation, commit_bytecode_upload_in_store, history_support, http_request,
+    read_generation, read_module_manifest, sha256_hex, upload_bytecode_in_store,
 };
 use ic_edge_canister::CdkHttpRequest;
 use ic_edge_store::{EdgeStore, StableEdgeStore};
@@ -33,16 +33,16 @@ fn generation_starts_at_zero_and_increments() {
 }
 
 #[test]
-fn chunk_upload_commits_bundle_and_bumps_generation_once() {
+fn chunk_upload_commits_bytecode_and_bumps_generation_once() {
     let mut store = StableEdgeStore::new();
-    begin_bundle_upload_in_store(&mut store, "app", 11, &manifest_json(b"hello world")).unwrap();
-    append_bundle_chunk_in_store(&mut store, "app", 0, b"hello ").unwrap();
-    append_bundle_chunk_in_store(&mut store, "app", 6, b"world").unwrap();
+    begin_bytecode_upload_in_store(&mut store, "app", 11, &manifest_json(b"hello world")).unwrap();
+    append_bytecode_chunk_in_store(&mut store, "app", 0, b"hello ").unwrap();
+    append_bytecode_chunk_in_store(&mut store, "app", 6, b"world").unwrap();
 
     assert_eq!(read_generation(&store), 0);
     assert_eq!(store.get_module("app"), Err(ic_edge_store::Error::NotFound));
 
-    commit_bundle_upload_in_store(&mut store, "app").unwrap();
+    commit_bytecode_upload_in_store(&mut store, "app").unwrap();
 
     assert_eq!(store.get_module("app").unwrap(), b"hello world");
     assert!(!read_module_manifest(&store, "app").is_empty());
@@ -52,7 +52,7 @@ fn chunk_upload_commits_bundle_and_bumps_generation_once() {
 #[test]
 fn chunk_upload_rejects_invalid_sizes_and_offsets() {
     let mut store = StableEdgeStore::new();
-    assert!(begin_bundle_upload_in_store(
+    assert!(begin_bytecode_upload_in_store(
         &mut store,
         "app",
         ic_edge_web::limits::MAX_BUNDLE_BYTES + 1,
@@ -60,9 +60,9 @@ fn chunk_upload_rejects_invalid_sizes_and_offsets() {
     )
     .is_err());
 
-    begin_bundle_upload_in_store(&mut store, "app", 4, &manifest_json(b"abcd")).unwrap();
-    assert!(append_bundle_chunk_in_store(&mut store, "app", 1, b"a").is_err());
-    assert!(append_bundle_chunk_in_store(
+    begin_bytecode_upload_in_store(&mut store, "app", 4, &manifest_json(b"abcd")).unwrap();
+    assert!(append_bytecode_chunk_in_store(&mut store, "app", 1, b"a").is_err());
+    assert!(append_bytecode_chunk_in_store(
         &mut store,
         "app",
         0,
@@ -70,35 +70,35 @@ fn chunk_upload_rejects_invalid_sizes_and_offsets() {
     )
     .is_err());
 
-    append_bundle_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
-    assert!(append_bundle_chunk_in_store(&mut store, "app", 3, b"de").is_err());
-    assert!(commit_bundle_upload_in_store(&mut store, "app").is_err());
+    append_bytecode_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
+    assert!(append_bytecode_chunk_in_store(&mut store, "app", 3, b"de").is_err());
+    assert!(commit_bytecode_upload_in_store(&mut store, "app").is_err());
 }
 
 #[test]
 fn chunk_upload_abort_discards_staging() {
     let mut store = StableEdgeStore::new();
-    begin_bundle_upload_in_store(&mut store, "app", 3, &manifest_json(b"abc")).unwrap();
-    append_bundle_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
-    abort_bundle_upload_in_store(&mut store, "app").unwrap();
+    begin_bytecode_upload_in_store(&mut store, "app", 3, &manifest_json(b"abc")).unwrap();
+    append_bytecode_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
+    abort_bytecode_upload_in_store(&mut store, "app").unwrap();
 
-    assert!(commit_bundle_upload_in_store(&mut store, "app").is_err());
+    assert!(commit_bytecode_upload_in_store(&mut store, "app").is_err());
     assert_eq!(read_generation(&store), 0);
 }
 
 #[test]
 fn direct_upload_requires_manifest() {
     let mut store = StableEdgeStore::new();
-    begin_bundle_upload_in_store(&mut store, "app", 3, &manifest_json(b"old")).unwrap();
-    append_bundle_chunk_in_store(&mut store, "app", 0, b"old").unwrap();
+    begin_bytecode_upload_in_store(&mut store, "app", 3, &manifest_json(b"old")).unwrap();
+    append_bytecode_chunk_in_store(&mut store, "app", 0, b"old").unwrap();
 
     assert_eq!(
-        upload_bundle_in_store(&mut store, "app", b"direct").unwrap_err(),
+        upload_bytecode_in_store(&mut store, "app", b"direct").unwrap_err(),
         "manifest is required"
     );
-    abort_bundle_upload_in_store(&mut store, "app").unwrap();
+    abort_bytecode_upload_in_store(&mut store, "app").unwrap();
 
-    assert!(commit_bundle_upload_in_store(&mut store, "app").is_err());
+    assert!(commit_bytecode_upload_in_store(&mut store, "app").is_err());
     assert_eq!(store.get_module("app"), Err(ic_edge_store::Error::NotFound));
     assert_eq!(read_generation(&store), 0);
 }
@@ -106,19 +106,19 @@ fn direct_upload_requires_manifest() {
 #[test]
 fn chunk_upload_rejects_manifest_hash_mismatch() {
     let mut store = StableEdgeStore::new();
-    begin_bundle_upload_in_store(&mut store, "app", 3, &manifest_json(b"bad")).unwrap();
-    append_bundle_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
+    begin_bytecode_upload_in_store(&mut store, "app", 3, &manifest_json(b"bad")).unwrap();
+    append_bytecode_chunk_in_store(&mut store, "app", 0, b"abc").unwrap();
 
     assert_eq!(
-        commit_bundle_upload_in_store(&mut store, "app").unwrap_err(),
-        "bundle sha256 does not match manifest"
+        commit_bytecode_upload_in_store(&mut store, "app").unwrap_err(),
+        "bytecode sha256 does not match manifest"
     );
     assert_eq!(store.get_module("app"), Err(ic_edge_store::Error::NotFound));
     assert_eq!(read_generation(&store), 0);
 }
 
 #[test]
-fn runtime_history_keeps_recent_snapshots_and_rolls_back_bundle_env() {
+fn runtime_history_keeps_recent_snapshots_and_rolls_back_bytecode_env() {
     let mut store = StableEdgeStore::new();
     for generation in 1..=6 {
         store
@@ -163,12 +163,12 @@ fn runtime_history_updates_duplicate_generation_without_duplicate_entry() {
     let history = history_support::runtime_history(&store);
     assert_eq!(history.len(), 1);
     assert_eq!(history[0].generation, 1);
-    assert_eq!(history[0].bundle_bytes, 3);
+    assert_eq!(history[0].bytecode_bytes, 3);
 }
 
-fn manifest_json(bundle: &[u8]) -> String {
+fn manifest_json(bytecode: &[u8]) -> String {
     format!(
-        "{{\"schema_version\":1,\"bundle_sha256\":\"{}\"}}",
-        sha256_hex(bundle)
+        "{{\"schema_version\":2,\"bytecode_sha256\":\"{}\"}}",
+        sha256_hex(bytecode)
     )
 }

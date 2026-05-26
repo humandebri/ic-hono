@@ -26,18 +26,18 @@ pub trait AsyncEdgeRuntime {
 ```
 
 host `QuickJsRuntime` は `rquickjs` で bundle を eval し、`app.fetch(request)` を呼ぶ。
-canister build は `quickjs-ic` feature のみを使う。`wasm32-wasip1` build、WASI import stub、`wasi2ic` 変換を行う。
+canister build は `quickjs-ic` feature のみを使う。`wasm32-wasip1` build、WASI import stub、`wasi2ic` 変換を行う。canister へ upload する app artifact は QuickJS bytecode。
 
 ## Bundle Contract
 
-v0.1 は ESM loader ではなく IIFE bundle を使う。`ic-edge pack` は local `esbuild` を実行し、この形を生成する。
+v0.2 は ESM loader ではなく IIFE bundle を中間成果物に使う。`ic-edge pack` は local `esbuild` で bundle を生成し、canister と同じ `quickjs-wasm-rs` 系の WASI helper で QuickJS bytecode を生成する。`wasmtime` CLI が必要。
 
 ```bash
 ic-edge pack src/app.ts --out dist/app.bundle.js
 ```
 
 CLI は esbuild を `--bundle --format=iife --global-name=__ic_edge_bundle --platform=neutral --conditions=browser,worker,import --target=es2018 --sourcemap=external` で実行する。
-CLI は出力 bundle を QuickJS runtime で eval し、`globalThis.__ic_edge_bundle.default.fetch` が function であることを検査する。bundle 隣接の `<bundle>.ic-edge-manifest.json` に bundle/source map sha256 と esbuild args を記録する。runtime は eval 後に次の値を app として扱う。
+CLI は出力 bundle を QuickJS runtime で eval し、`globalThis.__ic_edge_bundle.default.fetch` が function であることを検査する。bytecode 隣接の `<bytecode>.ic-edge-manifest.json` に `bytecode_sha256` / `source_bundle_sha256` / `source_map_sha256` と esbuild args を記録する。runtime は bytecode eval 後に次の値を app として扱う。
 
 ```ts
 globalThis.__ic_edge_bundle.default
@@ -117,30 +117,30 @@ canister から渡る path-only URL は runtime 内で仮 origin に正規化す
 
 `ic-edge-canister` は `wasm32-unknown-unknown` build 済み。
 
-`examples/canister-template` は `http_request` / `http_request_update` と bundle upload 入口を持つ。
+`examples/canister-template` は `http_request` / `http_request_update` と bytecode upload 入口を持つ。
 
 `icp.yaml` は `scripts/build_canister_backend_wasm.sh` を使う。script は `wasi_snapshot_preview1.*` import を stub 化してから `wasi2ic` で IC canister Wasm へ変換する。
 
 v0.2 の QuickJS backend 調査では DFINITY [`ic-quickjs-demo`](https://github.com/dfinity/ic-quickjs-demo) を第一参照にする。比較結果は [`quickjs-backend-comparison.md`](quickjs-backend-comparison.md) に記録する。
 
-## Bundle Upload
+## Bytecode Upload
 
 `ic-edge-pack` は local upload contract を持つ。
 
 ```bash
-ic-edge upload dist/app.bundle.js --module app
-ic-edge upload dist/app.bundle.js --module app --canister edge --environment local
+ic-edge upload dist/app.qjbc --module app
+ic-edge upload dist/app.qjbc --module app --canister edge --environment local
 ```
 
-`ic-edge upload` は bundle 隣接 manifest と source map を必須検証する。`--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `begin_bundle_upload(module, total_bytes, manifest_json)`、`append_bundle_chunk`、`commit_bundle_upload` を使う。chunk size は 512 KiB。失敗時は `abort_bundle_upload` を試行する。
+`ic-edge upload` は bytecode 隣接 manifest、bundle、source map を必須検証する。`--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `begin_bytecode_upload(module, total_bytes, manifest_json)`、`append_bytecode_chunk`、`commit_bytecode_upload` を使う。chunk size は 512 KiB。失敗時は `abort_bytecode_upload` を試行する。
 
-canister template 側は manifest なし raw upload を拒否する `upload_bundle(module, bytes)`、chunk upload 用 `begin_bundle_upload(module, total_bytes, manifest_json)` / `append_bundle_chunk(module, offset, bytes)` / `commit_bundle_upload(module)` / `abort_bundle_upload(module)`、`bundle_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。mutation API と `fetch_outcall(url)` は controller 限定。
-通信断などで staging KV が残っても runtime module には反映しない。次回同一 module の `begin_bundle_upload` が既存 staging を破棄する。staging 一覧と掃除 API は v1 preview 対象外。
-`runtime_info()` は runtime backend 名、cache invalidation 用 generation、現在の `bundle_sha256` を返す。generation は `commit_bundle_upload`、`set_env` 成功時に増加し、canister upgrade では維持される。
+canister template 側は manifest なし raw upload を拒否する `upload_bytecode(module, bytes)`、chunk upload 用 `begin_bytecode_upload(module, total_bytes, manifest_json)` / `append_bytecode_chunk(module, offset, bytes)` / `commit_bytecode_upload(module)` / `abort_bytecode_upload(module)`、`bytecode_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。mutation API と `fetch_outcall(url)` は controller 限定。
+通信断などで staging KV が残っても runtime module には反映しない。次回同一 module の `begin_bytecode_upload` が既存 staging を破棄する。staging 一覧と掃除 API は v1 preview 対象外。
+`runtime_info()` は runtime backend 名、cache invalidation 用 generation、現在の `bytecode_sha256` を返す。generation は `commit_bytecode_upload`、`set_env` 成功時に増加し、canister upgrade では維持される。
 
-`quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`commit_bundle_upload()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。
+`quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`commit_bytecode_upload()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。
 
-`rollback_runtime(generation)` は直近 5 世代の bundle/env/manifest snapshot から復元し、復元後に新しい generation を発行する。
+`rollback_runtime(generation)` は直近 5 世代の bytecode/env/manifest snapshot から復元し、復元後に新しい generation を発行する。
 
 OpenAI / Upstash のような HTTPS outcall 用 secret は bundle に埋め込まず、deploy 後に注入する。
 

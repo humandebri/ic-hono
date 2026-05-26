@@ -33,22 +33,22 @@ v1 preview Worker互換 Core+Cache runtime の制約。crate semver は `0.2.0`�
 
 - `http_request` / `http_request_update` の CDK endpoint 関数は template 実装済み。
 - CDK 形状の request/response DTO と変換関数は実装済み。
-- `examples/canister-template` は bundle upload 入口付きで wasm build 済み。`icp.yaml` は backend build script で release wasm を build し、Candid metadata を埋め込む。
-- `scripts/icp_local_smoke.sh` は fresh `icp build edge`、`icp deploy edge --yes`、bundle upload、direct update、IC Gateway、JS `fetch()` HTTPS outcall、stable Cache、rollback、zod direct update を検証する。
+- `examples/canister-template` は bytecode upload 入口付きで wasm build 済み。`icp.yaml` は backend build script で release wasm を build し、Candid metadata を埋め込む。
+- `scripts/icp_local_smoke.sh` は fresh `icp build edge`、`icp deploy edge --yes`、bytecode upload、direct update、IC Gateway、JS `fetch()` HTTPS outcall、stable Cache、rollback、zod direct update を検証する。
 - 実 OpenAI / Upstash smoke は API key / REST token が必要なため任意確認。外部 fetch 経路自体は `example.com` と Hono fetch example で canister smoke 済み。
 - HTTPS outcalls adapter と transform は実装済み。
 - JS `fetch()` から Rust `HostFetch` への mock bridge は host smoke 済み。
 - `fetch_outcall(url)` update endpoint は controller-only smoke helper として HTTPS outcalls adapter に接続済み。
 - canister 内 JS `fetch()` から HTTPS outcalls adapter への実配線は `http_request_update` の async 経路で実装済み。
 - stable memory-backed store は `ic-stable-structures` 実装済み。
-- local memory store、stable memory store、manifest 必須 `ic-edge upload`、chunk upload 経路は実装済み。`upload_bundle` raw upload は拒否する。
-- upgrade hooks は未実装。現行 smoke は stable memory に保存した bundle / env が upgrade 後も読めることを確認する。
-- `runtime_history()` と `rollback_runtime()` は直近 5 世代の bundle/env/manifest snapshot を扱う。module は v1 では `app` を snapshot 対象にする。
+- local memory store、stable memory store、manifest 必須 `ic-edge upload`、bytecode chunk upload 経路は実装済み。`upload_bytecode` raw upload は拒否する。
+- upgrade hooks は未実装。現行 smoke は stable memory に保存した bytecode / env が upgrade 後も読めることを確認する。
+- `runtime_history()` と `rollback_runtime()` は直近 5 世代の bytecode/env/manifest snapshot を扱う。module は v1 では `app` を snapshot 対象にする。
 
 ## Fixed Limits
 
-- bundle: 2 MiB
-- bundle upload chunk: 512 KiB
+- bytecode: 2 MiB
+- bytecode upload chunk: 512 KiB
 - inbound body: 1 MiB
 - JS response body: 1 MiB
 - fetch response: default 64 KiB / max 2 MiB

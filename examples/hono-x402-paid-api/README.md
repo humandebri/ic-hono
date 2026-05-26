@@ -7,7 +7,7 @@ It uses `@x402/core/server`, `@x402/evm/exact/server`, manual `PAYMENT-REQUIRED`
 ```bash
 npm install
 npm run build
-cargo run -p ic-edge-pack --bin ic-edge -- upload dist/app.bundle.js --canister edge --environment local
+cargo run -p ic-edge-pack --bin ic-edge -- upload dist/app.qjbc --canister edge --environment local
 ```
 
 Routes:

@@ -2,12 +2,12 @@
 
 ## Trust Boundary
 
-User bundle は canister 内 QuickJS context で実行する。browser DOM、native addon、canister 内 npm install は対象外。
-Uploaded bundle は trusted code として扱う。悪意ある bundle は `process.env` の secret を読み、許可された `fetch()` で外部送信できる。
+User bytecode は canister 内 QuickJS context で実行する。browser DOM、native addon、canister 内 npm install は対象外。
+Uploaded bytecode は trusted code として扱う。悪意ある app は `process.env` の secret を読み、許可された `fetch()` で外部送信できる。
 
-## Bundle Upload
+## Bytecode Upload
 
-`upload_bundle(module, bytes)` は manifest なし raw upload として拒否する。chunk upload API は controller 限定で、`begin_bundle_upload(module, total_bytes, manifest_json)` に `ic-edge pack` 生成 manifest を必須とする。bundle は stable memory に保存され、HTTP request 時に `app` module として評価される。chunk upload は bundle bytes と manifest を staging KV に保存し、`commit_bundle_upload(module)` 成功時に staged bytes の sha256 と manifest `bundle_sha256` を照合してから runtime module と generation を更新する。
+`upload_bytecode(module, bytes)` は manifest なし raw upload として拒否する。chunk upload API は controller 限定で、`begin_bytecode_upload(module, total_bytes, manifest_json)` に `ic-edge pack` 生成 manifest を必須とする。bytecode は stable memory に保存され、HTTP request 時に `app` module として評価される。chunk upload は bytecode bytes と manifest を staging KV に保存し、`commit_bytecode_upload(module)` 成功時に staged bytes の sha256 と manifest `bytecode_sha256` を照合してから runtime module と generation を更新する。
 
 `set_env(name, value)` と direct smoke 用 `fetch_outcall(url)` / `fetch_outcall_replicated(url)` も controller 限定。secret 値は query で返さない。`env_names()` は設定済みの名前だけを返す。
 
@@ -15,9 +15,9 @@ Uploaded bundle は trusted code として扱う。悪意ある bundle は `proc
 
 ## Secrets
 
-API key を bundle に埋め込まない。OpenAI / Upstash examples は `process.env` から secret を読む。host smoke は dummy env を注入する。
+API key を bundle / bytecode に埋め込まない。OpenAI / Upstash examples は `process.env` から secret を読む。host smoke は dummy env を注入する。
 
-実 canister では HTTPS outcall 用 secret を `set_env` で注入する。bundle 評価前に template が stable store から `process.env` へ復元する。
+実 canister では HTTPS outcall 用 secret を `set_env` で注入する。bytecode 評価前に template が stable store から `process.env` へ復元する。
 `IC_EDGE_FULL_SMOKE=1` の preflight は不足 env 名だけを出し、secret 値は出力しない。
 
 許可する env 名は `A-Z`、`0-9`、`_` のみ。値は JSON string として JS に注入するため、quote / 改行を含む値も構文を破壊しない。
@@ -34,7 +34,7 @@ HTTPS outcall は未指定で非複製。複製が必要な呼び出しは `fetc
 
 公開 API は compatibility matrix に記録した subset のみ。Node core modules、filesystem、process mutation、DOM、streams full support は非対応。
 
-`http_request_update` は `raw_rand().await` 完了後に generation / bundle / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`commit_bundle_upload()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
+`http_request_update` は `raw_rand().await` 完了後に generation / bytecode / env を stable store から読む。dispatch 開始時点の runtime snapshot で request を完了し、`commit_bytecode_upload()` / `set_env()` / `rollback_runtime()` 完了後の新規 request は新 generation を読む。
 
 ## Cache
 
@@ -48,4 +48,4 @@ Cache 追加上限: name 128 bytes、key 2 KiB、index 1024 entries、index JSON
 
 ## Rollback
 
-`rollback_runtime(generation)` は controller 限定。直近 5 世代の bundle/env/manifest snapshot だけを復元対象にする。
+`rollback_runtime(generation)` は controller 限定。直近 5 世代の bytecode/env/manifest snapshot だけを復元対象にする。

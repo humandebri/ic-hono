@@ -7,7 +7,7 @@ It serves an HTML status page, JSON health endpoints, stable incident storage th
 ```bash
 npm install
 npm run build
-cargo run -p ic-edge-pack --bin ic-edge -- upload dist/app.bundle.js --canister edge --environment local
+cargo run -p ic-edge-pack --bin ic-edge -- upload dist/app.qjbc --canister edge --environment local
 ```
 
 Gateway URL:

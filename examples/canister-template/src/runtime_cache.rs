@@ -17,22 +17,25 @@ struct CachedRuntime {
     runtime: QuickJsRuntime,
 }
 
-pub(super) fn take_runtime(
-    generation: u64,
-    env_source: &str,
-    app_source: &str,
-) -> ic_edge_web::Result<QuickJsRuntime> {
+pub(super) fn take_cached_runtime(generation: u64) -> Option<QuickJsRuntime> {
     if let Some(cached) = RUNTIME_CACHE.take() {
         if cached.generation == generation {
-            return Ok(cached.runtime);
+            return Some(cached.runtime);
         }
     }
+    None
+}
+
+pub(super) fn build_runtime(
+    env_source: &str,
+    app_bytecode: &[u8],
+) -> ic_edge_web::Result<QuickJsRuntime> {
     let mut runtime = QuickJsRuntime::new()?;
     runtime.install_async_fetch(OutcallFetch);
     runtime.install_cache(crate::cache_support::StableCacheHost);
     runtime.install_audit(crate::audit_support::StableAuditHost);
     runtime.eval_module("env", env_source)?;
-    runtime.eval_module("app", app_source)?;
+    runtime.eval_bytecode(app_bytecode)?;
     Ok(runtime)
 }
 

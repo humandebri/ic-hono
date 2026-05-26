@@ -121,6 +121,32 @@ impl QuickJsRuntime {
             .map_err(to_runtime_error)
     }
 
+    /// Evaluates QuickJS bytecode produced by the ic-edge bytecode compiler.
+    pub fn eval_bytecode(&mut self, bytecode: &[u8]) -> Result<()> {
+        self.context
+            .eval_binary(bytecode)
+            .map_err(to_runtime_error)?;
+        self.context
+            .eval_global(
+                "app-default.js",
+                "if (globalThis.__ic_edge_bundle?.default) globalThis.__ic_edge_app = globalThis.__ic_edge_bundle.default",
+            )
+            .map_err(to_runtime_error)?;
+        let has_fetch = self
+            .context
+            .eval_global(
+                "app-fetch-contract.js",
+                "typeof globalThis.__ic_edge_app?.fetch === 'function'",
+            )
+            .map_err(to_runtime_error)?;
+        if has_fetch.to_string() != "true" {
+            return Err(Error::Runtime(
+                "bytecode default export must expose fetch".to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     fn drain_jobs(&self) -> Result<()> {
         self.context.execute_pending().map_err(to_runtime_error)
     }

@@ -31,14 +31,14 @@ require_source() {
 for method in \
   http_request \
   http_request_update \
-  upload_bundle \
-  begin_bundle_upload \
-  append_bundle_chunk \
-  commit_bundle_upload \
-  abort_bundle_upload \
+  upload_bytecode \
+  begin_bytecode_upload \
+  append_bytecode_chunk \
+  commit_bytecode_upload \
+  abort_bytecode_upload \
   set_env \
   env_names \
-  bundle_size \
+  bytecode_size \
   runtime_info \
   runtime_history \
   rollback_runtime \
@@ -52,7 +52,7 @@ done
 
 require_did http_request query
 require_did env_names query
-require_did bundle_size query
+require_did bytecode_size query
 require_did runtime_info query
 require_did runtime_history query
 require_did transform_strip_headers query
@@ -77,13 +77,13 @@ grep -q 'generation : nat64' "$DID" || {
   exit 1
 }
 
-grep -q 'bundle_sha256 : opt text' "$DID" || {
-  echo "RuntimeInfo must expose bundle_sha256 : opt text" >&2
+grep -q 'bytecode_sha256 : opt text' "$DID" || {
+  echo "RuntimeInfo must expose bytecode_sha256 : opt text" >&2
   exit 1
 }
 
-grep -q 'begin_bundle_upload : (text, nat64, text)' "$DID" || {
-  echo "begin_bundle_upload must require manifest_json" >&2
+grep -q 'begin_bytecode_upload : (text, nat64, text)' "$DID" || {
+  echo "begin_bytecode_upload must require manifest_json" >&2
   exit 1
 }
 

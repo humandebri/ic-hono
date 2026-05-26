@@ -10,6 +10,7 @@ const REPEATS = Number(process.env.IC_EDGE_CYCLE_REPEATS || '5')
 const SHORT_REPEATS = Number(process.env.IC_EDGE_CYCLE_SHORT_REPEATS || '3')
 const APP_ENTRY = process.env.IC_EDGE_MEASURE_ENTRY || 'examples/hono-status/src/app.ts'
 const BUNDLE = process.env.IC_EDGE_MEASURE_BUNDLE || 'examples/hono-status/dist/app.bundle.js'
+const BYTECODE = BUNDLE.replace(/\.bundle\.js$/, '.qjbc')
 
 const rows = []
 
@@ -128,7 +129,7 @@ function manifestUpload() {
     'ic-edge',
     '--',
     'upload',
-    BUNDLE,
+    BYTECODE,
     '--canister',
     CANISTER,
     '--environment',
@@ -146,7 +147,7 @@ function prepare() {
   run('cargo', ['run', '-q', '-p', 'ic-edge-pack', '--bin', 'ic-edge', '--', 'pack', APP_ENTRY, '--out', BUNDLE], {
     stderr: 'inherit',
   })
-  run('cargo', ['run', '-q', '-p', 'ic-edge-pack', '--bin', 'ic-edge', '--', 'upload', BUNDLE, '--canister', CANISTER, '--environment', ENVIRONMENT], {
+  run('cargo', ['run', '-q', '-p', 'ic-edge-pack', '--bin', 'ic-edge', '--', 'upload', BYTECODE, '--canister', CANISTER, '--environment', ENVIRONMENT], {
     stderr: 'inherit',
   })
 }
@@ -159,6 +160,7 @@ function renderMarkdown() {
     `- environment: ${ENVIRONMENT}`,
     `- app entry: ${APP_ENTRY}`,
     `- bundle: ${BUNDLE}`,
+    `- bytecode: ${BYTECODE}`,
     `- repeats: ${REPEATS}`,
     '- delta: `before_cycles - after_cycles - idle_burn_elapsed`',
     '- scope: local PocketIC/icp-cli environment; not mainnet pricing',
@@ -178,11 +180,11 @@ function renderMarkdown() {
 prepare()
 
 measure(
-  'abort_bundle_upload_missing',
+  'abort_bytecode_upload_missing',
   REPEATS,
   null,
-  (i) => canisterCall('abort_bundle_upload', `("missing-${i}")`),
-  (out) => expectContains(out, 'Ok', 'abort_bundle_upload'),
+  (i) => canisterCall('abort_bytecode_upload', `("missing-${i}")`),
+  (out) => expectContains(out, 'Ok', 'abort_bytecode_upload'),
 )
 
 measure(

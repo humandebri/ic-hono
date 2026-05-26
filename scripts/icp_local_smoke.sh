@@ -61,7 +61,9 @@ call_update() {
 }
 
 upload_example() {
-  cargo run -p ic-edge-pack --bin ic-edge -- upload "$1" --canister edge --environment local
+  local bundle="$1"
+  local bytecode="${bundle%.bundle.js}.qjbc"
+  cargo run -p ic-edge-pack --bin ic-edge -- upload "$bytecode" --canister edge --environment local
 }
 
 pack_example() {
@@ -124,7 +126,7 @@ expect_contains 'status_code = 200' icp canister call edge fetch_outcall_replica
 runtime_info_before_upgrade="$(icp canister call edge runtime_info '()' --environment local)"
 grep -q 'generation' <<<"$runtime_info_before_upgrade"
 run_logged_retry icp-deploy-upgrade icp deploy edge --yes
-expect_contains 'opt' icp canister call edge bundle_size '("app")' --environment local
+expect_contains 'opt' icp canister call edge bytecode_size '("app")' --environment local
 expect_contains 'IC_EDGE_SMOKE' icp canister call edge env_names '()' --environment local
 runtime_info_after_upgrade="$(icp canister call edge runtime_info '()' --environment local)"
 [[ "$runtime_info_after_upgrade" == "$runtime_info_before_upgrade" ]]

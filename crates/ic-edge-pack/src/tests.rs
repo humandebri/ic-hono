@@ -34,14 +34,19 @@ fn pack_runs_esbuild_and_checks_contract() {
         out_file.clone(),
     ])
     .unwrap();
-    assert_eq!(output, format!("packed {out_file}"));
+    let bytecode_file = root.join("dist/app.qjbc").to_string_lossy().to_string();
+    assert_eq!(output, format!("packed {bytecode_file}"));
     let args = fs::read_to_string(format!("{out_file}.args")).unwrap();
     assert!(!args.lines().any(|arg| arg == "--minify"));
     assert!(args.lines().any(|arg| arg == "--sourcemap=external"));
     assert!(Path::new(&format!("{out_file}.map")).exists());
-    let manifest_path = format!("{out_file}.ic-edge-manifest.json");
+    assert!(Path::new(&bytecode_file).exists());
+    let manifest_path = format!("{bytecode_file}.ic-edge-manifest.json");
     let manifest = fs::read_to_string(manifest_path).unwrap();
-    assert!(manifest.contains("\"schema_version\": 1"));
+    assert!(manifest.contains("\"schema_version\": 2"));
+    assert!(manifest.contains("\"format\": \"quickjs-bytecode\""));
+    assert!(manifest.contains("\"bytecode_sha256\""));
+    assert!(manifest.contains("\"source_bundle_sha256\""));
     assert!(manifest.contains("\"source_map_sha256\""));
 }
 
@@ -140,7 +145,7 @@ fn upload_requires_manifest() {
         std::process::id()
     ));
     fs::create_dir_all(&root).unwrap();
-    let bundle = root.join("bundle.js");
+    let bundle = root.join("bundle.qjbc");
     fs::write(
         &bundle,
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();",
@@ -155,29 +160,46 @@ fn upload_requires_manifest() {
 }
 
 #[test]
+fn upload_rejects_js_source_artifact() {
+    let root = env::temp_dir().join(format!("ic-edge-upload-js-test-{}", std::process::id()));
+    fs::create_dir_all(&root).unwrap();
+    let source = root.join("bundle.js");
+    fs::write(&source, "var __ic_edge_bundle = {};").unwrap();
+
+    let error = run(vec![
+        "upload".to_string(),
+        source.to_string_lossy().to_string(),
+    ])
+    .unwrap_err();
+    assert_eq!(error, "upload expects a .qjbc bytecode artifact");
+}
+
+#[test]
 fn upload_rejects_manifest_hash_mismatch() {
     let root = env::temp_dir().join(format!("ic-edge-upload-hash-test-{}", std::process::id()));
     fs::create_dir_all(&root).unwrap();
     let bundle = root.join("bundle.js");
+    let bytecode = root.join("bundle.qjbc");
     let source_map = root.join("bundle.js.map");
     fs::write(
         &bundle,
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();",
     )
     .unwrap();
+    fs::write(&bytecode, b"bytecode").unwrap();
     fs::write(
         &source_map,
         "{\"version\":3,\"sources\":[],\"mappings\":\"\"}",
     )
     .unwrap();
-    write_test_manifest(&bundle, &source_map, "0".repeat(64));
+    write_test_manifest(&bytecode, &bundle, &source_map, "0".repeat(64));
 
     let error = run(vec![
         "upload".to_string(),
-        bundle.to_string_lossy().to_string(),
+        bytecode.to_string_lossy().to_string(),
     ])
     .unwrap_err();
-    assert_eq!(error, "bundle sha256 does not match manifest");
+    assert_eq!(error, "bytecode sha256 does not match manifest");
 }
 
 #[test]
@@ -188,11 +210,14 @@ fn upload_rejects_missing_source_map() {
     ));
     fs::create_dir_all(&root).unwrap();
     let bundle = root.join("bundle.js");
+    let bytecode = root.join("bundle.qjbc");
     let source_map = root.join("bundle.js.map");
     let source =
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();";
     fs::write(&bundle, source).unwrap();
+    fs::write(&bytecode, source).unwrap();
     write_test_manifest(
+        &bytecode,
         &bundle,
         &source_map,
         ic_edge_pack::sha256_hex(source.as_bytes()),
@@ -200,7 +225,7 @@ fn upload_rejects_missing_source_map() {
 
     let error = run(vec![
         "upload".to_string(),
-        bundle.to_string_lossy().to_string(),
+        bytecode.to_string_lossy().to_string(),
     ])
     .unwrap_err();
     assert_eq!(error, "source map is required");
@@ -214,16 +239,19 @@ fn upload_rejects_source_map_hash_mismatch() {
     ));
     fs::create_dir_all(&root).unwrap();
     let bundle = root.join("bundle.js");
+    let bytecode = root.join("bundle.qjbc");
     let source_map = root.join("bundle.js.map");
     let source =
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();";
     fs::write(&bundle, source).unwrap();
+    fs::write(&bytecode, source).unwrap();
     fs::write(
         &source_map,
         "{\"version\":3,\"sources\":[],\"mappings\":\"\"}",
     )
     .unwrap();
     write_test_manifest(
+        &bytecode,
         &bundle,
         &source_map,
         ic_edge_pack::sha256_hex(source.as_bytes()),
@@ -231,7 +259,7 @@ fn upload_rejects_source_map_hash_mismatch() {
 
     let error = run(vec![
         "upload".to_string(),
-        bundle.to_string_lossy().to_string(),
+        bytecode.to_string_lossy().to_string(),
     ])
     .unwrap_err();
     assert_eq!(error, "source map sha256 does not match manifest");
@@ -245,30 +273,34 @@ fn upload_accepts_manifest_hashes_for_local_store() {
     ));
     fs::create_dir_all(&root).unwrap();
     let bundle = root.join("bundle.js");
+    let bytecode = root.join("bundle.qjbc");
     let source_map = root.join("bundle.js.map");
     let source =
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();";
     let map = "{\"version\":3,\"sources\":[],\"mappings\":\"\"}";
     fs::write(&bundle, source).unwrap();
+    fs::write(&bytecode, source).unwrap();
     fs::write(&source_map, map).unwrap();
     write_test_manifest_with_hashes(
+        &bytecode,
         &bundle,
         &source_map,
+        ic_edge_pack::sha256_hex(source.as_bytes()),
         ic_edge_pack::sha256_hex(source.as_bytes()),
         ic_edge_pack::sha256_hex(map.as_bytes()),
     );
 
     let output = run(vec![
         "upload".to_string(),
-        bundle.to_string_lossy().to_string(),
+        bytecode.to_string_lossy().to_string(),
     ])
     .unwrap();
     assert!(output.starts_with("uploaded "));
-    assert!(output.ends_with(" bytes to module app"));
+    assert!(output.ends_with(" bytecode bytes to module app"));
 }
 
 #[test]
-fn upload_accepts_equivalent_bundle_path_spelling() {
+fn upload_accepts_equivalent_bytecode_path_spelling() {
     let root = env::temp_dir().join(format!(
         "ic-edge-upload-equivalent-path-test-{}",
         std::process::id()
@@ -276,20 +308,24 @@ fn upload_accepts_equivalent_bundle_path_spelling() {
     let dist = root.join("dist");
     fs::create_dir_all(&dist).unwrap();
     let bundle = dist.join("bundle.js");
+    let bytecode = dist.join("bundle.qjbc");
     let source_map = dist.join("bundle.js.map");
     let source =
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();";
     let map = "{\"version\":3,\"sources\":[],\"mappings\":\"\"}";
     fs::write(&bundle, source).unwrap();
+    fs::write(&bytecode, source).unwrap();
     fs::write(&source_map, map).unwrap();
     write_test_manifest_with_hashes(
+        &bytecode,
         &bundle,
         &source_map,
+        ic_edge_pack::sha256_hex(source.as_bytes()),
         ic_edge_pack::sha256_hex(source.as_bytes()),
         ic_edge_pack::sha256_hex(map.as_bytes()),
     );
 
-    let equivalent = dist.join("../dist/bundle.js");
+    let equivalent = dist.join("../dist/bundle.qjbc");
     let output = run(vec![
         "upload".to_string(),
         equivalent.to_string_lossy().to_string(),
@@ -299,75 +335,95 @@ fn upload_accepts_equivalent_bundle_path_spelling() {
 }
 
 #[test]
-fn upload_rejects_manifest_for_different_bundle_path() {
+fn upload_rejects_manifest_for_different_bytecode_path() {
     let root = env::temp_dir().join(format!(
         "ic-edge-upload-different-path-test-{}",
         std::process::id()
     ));
     fs::create_dir_all(&root).unwrap();
     let bundle = root.join("bundle.js");
-    let other_bundle = root.join("other.js");
+    let bytecode = root.join("bundle.qjbc");
+    let other_bytecode = root.join("other.qjbc");
     let source_map = root.join("bundle.js.map");
     let source =
         "var __ic_edge_bundle = (() => ({ default: { fetch: () => new Response('ok') } }))();";
     let map = "{\"version\":3,\"sources\":[],\"mappings\":\"\"}";
     fs::write(&bundle, source).unwrap();
-    fs::write(&other_bundle, source).unwrap();
+    fs::write(&bytecode, source).unwrap();
+    fs::write(&other_bytecode, source).unwrap();
     fs::write(&source_map, map).unwrap();
     write_test_manifest_with_bundle_path(
+        &bytecode,
+        &other_bytecode,
         &bundle,
-        &other_bundle,
         &source_map,
+        ic_edge_pack::sha256_hex(source.as_bytes()),
         ic_edge_pack::sha256_hex(source.as_bytes()),
         ic_edge_pack::sha256_hex(map.as_bytes()),
     );
 
     let error = run(vec![
         "upload".to_string(),
-        bundle.to_string_lossy().to_string(),
+        bytecode.to_string_lossy().to_string(),
     ])
     .unwrap_err();
-    assert_eq!(error, "manifest bundle_path does not match upload path");
+    assert_eq!(error, "manifest bytecode_path does not match upload path");
 }
 
-fn write_test_manifest(bundle: &Path, source_map: &Path, bundle_sha256: String) {
-    write_test_manifest_with_hashes(bundle, source_map, bundle_sha256, "0".repeat(64));
+fn write_test_manifest(bytecode: &Path, bundle: &Path, source_map: &Path, bytecode_sha256: String) {
+    write_test_manifest_with_hashes(
+        bytecode,
+        bundle,
+        source_map,
+        bytecode_sha256,
+        ic_edge_pack::sha256_hex(fs::read(bundle).unwrap().as_slice()),
+        "0".repeat(64),
+    );
 }
 
 fn write_test_manifest_with_hashes(
+    bytecode: &Path,
     bundle: &Path,
     source_map: &Path,
-    bundle_sha256: String,
+    bytecode_sha256: String,
+    source_bundle_sha256: String,
     source_map_sha256: String,
 ) {
     write_test_manifest_with_bundle_path(
-        bundle,
+        bytecode,
+        bytecode,
         bundle,
         source_map,
-        bundle_sha256,
+        bytecode_sha256,
+        source_bundle_sha256,
         source_map_sha256,
     );
 }
 
 fn write_test_manifest_with_bundle_path(
-    manifest_for_bundle: &Path,
+    manifest_file_for_bytecode: &Path,
+    manifest_bytecode_path: &Path,
     manifest_bundle_path: &Path,
     source_map: &Path,
-    bundle_sha256: String,
+    bytecode_sha256: String,
+    source_bundle_sha256: String,
     source_map_sha256: String,
 ) {
     let manifest = ic_edge_pack::BundleArtifactManifest {
-        schema_version: 1,
-        format: "iife".to_string(),
+        schema_version: 2,
+        format: "quickjs-bytecode".to_string(),
         global_name: "__ic_edge_bundle".to_string(),
         entrypoint: "src/app.ts".to_string(),
         bundle_path: manifest_bundle_path.to_string_lossy().to_string(),
-        bundle_sha256,
+        source_bundle_sha256,
+        bytecode_path: manifest_bytecode_path.to_string_lossy().to_string(),
+        bytecode_sha256,
         source_map_path: source_map.to_string_lossy().to_string(),
         source_map_sha256,
+        quickjs_wasm_rs_version: "3.1.0".to_string(),
         esbuild_args: Vec::new(),
     };
-    let path = ic_edge_pack::artifact_manifest_path(manifest_for_bundle);
+    let path = ic_edge_pack::artifact_manifest_path(manifest_file_for_bytecode);
     let json = serde_json::to_string_pretty(&manifest).unwrap();
     fs::write(path, format!("{json}\n")).unwrap();
 }
@@ -402,6 +458,38 @@ fn parses_canister_call_result_variants() {
         parse_canister_call_result(b"unexpected", b"").unwrap_err(),
         "unexpected"
     );
+}
+
+#[test]
+fn preopen_dir_uses_current_dir_for_bare_output_file() {
+    assert_eq!(
+        preopen_dir_for_path(Path::new("app.bundle.js")),
+        Path::new(".")
+    );
+}
+
+#[test]
+fn preopen_dir_uses_parent_for_relative_and_absolute_paths() {
+    assert_eq!(
+        preopen_dir_for_path(Path::new("dist/app.bundle.js")),
+        Path::new("dist")
+    );
+    let temp = env::temp_dir();
+    let absolute = temp.join("app.bundle.js");
+    assert_eq!(preopen_dir_for_path(&absolute), temp.as_path());
+}
+
+#[test]
+fn bytecode_compiler_wasm_prefers_explicit_override() {
+    let path =
+        bytecode_compiler_wasm_with_override(Some("/tmp/custom-helper.wasm".to_string())).unwrap();
+    assert_eq!(path, PathBuf::from("/tmp/custom-helper.wasm"));
+}
+
+#[test]
+fn bytecode_compiler_wasm_materializes_bundled_asset() {
+    let path = bytecode_compiler_wasm_with_override(None).unwrap();
+    assert_eq!(fs::read(path).unwrap(), BYTECODE_COMPILER_WASM);
 }
 
 #[test]

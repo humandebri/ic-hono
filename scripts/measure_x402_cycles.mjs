@@ -9,6 +9,7 @@ const ENVIRONMENT = 'local'
 const BASE_URL = 'http://edge.local.localhost:8000'
 const ENTRY = 'examples/hono-x402-paid-api/src/app.ts'
 const BUNDLE = 'examples/hono-x402-paid-api/dist/app.bundle.js'
+const BYTECODE = 'examples/hono-x402-paid-api/dist/app.qjbc'
 const REPEATS = Number(process.env.IC_EDGE_X402_CYCLE_REPEATS || '3')
 const USD_PER_T_CYCLE = 1.33
 
@@ -82,7 +83,7 @@ async function prepare() {
       'ic-edge',
       '--',
       'upload',
-      BUNDLE,
+      BYTECODE,
       '--canister',
       CANISTER,
       '--environment',
@@ -143,6 +144,7 @@ function markdown() {
     `- environment: ${ENVIRONMENT}`,
     `- app entry: ${ENTRY}`,
     `- bundle: ${BUNDLE}`,
+    `- bytecode: ${BYTECODE}`,
     `- repeats: ${REPEATS}`,
     '- delta: `before_cycles - after_cycles - idle_burn_elapsed`',
     '- scope: local PocketIC/icp-cli environment; not mainnet pricing',

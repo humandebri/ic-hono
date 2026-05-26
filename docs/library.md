@@ -72,8 +72,10 @@ cargo build --target wasm32-wasip1 -p ic-edge-canister-template --release --feat
 - MSRV: Rust `1.85`.
 - Required target: `wasm32-wasip1`.
 - Node.js 20+ for example bundle builds.
+- `wasmtime` CLI for `ic-edge pack` bytecode generation.
 - `wasi2ic`, `ic-wasm`, and `wabt`/`wasm-objdump` for canister build audits.
 - `quickjs-wasm-sys` fetches a WASI SDK on first build unless `QUICKJS_WASM_SYS_WASI_SDK_PATH` points at a local SDK. Pin that path in offline or hermetic CI.
+- Run `scripts/build_bytecode_compiler_asset.sh` after changing `ic-edge-bytecode-compiler`; `ic-edge-pack` embeds the generated wasm helper for installed CLI usage, and `scripts/package_crates.sh` fails if the asset is stale.
 
 ## Publish Check
 
