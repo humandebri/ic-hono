@@ -7,7 +7,7 @@
   },
   "dependencies": {
     "@upstash/redis": "^1.35.3",
-    "hono": "^4.7.0"
+    "hono": "^4.12.21"
   },
   "devDependencies": {
     "esbuild": "^0.25.0",

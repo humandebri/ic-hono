@@ -6,7 +6,7 @@
     "build": "cargo run -q -p ic-edge-pack --bin ic-edge -- pack src/app.ts --out dist/app.bundle.js"
   },
   "dependencies": {
-    "hono": "^4.7.0",
+    "hono": "^4.12.21",
     "zod": "^3.25.0"
   },
   "devDependencies": {
