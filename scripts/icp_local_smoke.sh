@@ -61,14 +61,17 @@ call_update() {
 }
 
 upload_example() {
-  cargo run -p ic-edge-pack --bin ic-edge -- upload "$1" --canister edge --environment local
+  local bundle="$1"
+  local bytecode="${bundle%.bundle.js}.qjbc"
+  cargo run -p ic-edge-pack --bin ic-edge -- upload "$bytecode" --canister edge --environment local
 }
 
 pack_example() {
   local entry="$1"
   local out="$2"
-  echo "packing minified bundle: $entry -> $out"
-  cargo run -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
+  echo "packing bundle with manifest: $entry -> $out"
+  PATH="$ROOT/examples/hono-basic/node_modules/.bin:$PATH" \
+    cargo run -p ic-edge-pack --bin ic-edge -- pack "$entry" --out "$out" >/dev/null
 }
 
 set_env_value() {
@@ -123,7 +126,7 @@ expect_contains 'status_code = 200' icp canister call edge fetch_outcall_replica
 runtime_info_before_upgrade="$(icp canister call edge runtime_info '()' --environment local)"
 grep -q 'generation' <<<"$runtime_info_before_upgrade"
 run_logged_retry icp-deploy-upgrade icp deploy edge --yes
-expect_contains 'opt' icp canister call edge bundle_size '("app")' --environment local
+expect_contains 'opt' icp canister call edge bytecode_size '("app")' --environment local
 expect_contains 'IC_EDGE_SMOKE' icp canister call edge env_names '()' --environment local
 runtime_info_after_upgrade="$(icp canister call edge runtime_info '()' --environment local)"
 [[ "$runtime_info_after_upgrade" == "$runtime_info_before_upgrade" ]]
@@ -162,14 +165,14 @@ curl -fsS "${GATEWAY_URL%/}/cache-expired?canisterId=${CANISTER_ID}" | grep -qx 
 curl -fsS "${GATEWAY_URL%/}/time?canisterId=${CANISTER_ID}" | grep -Eq '^[0-9]+$'
 curl -fsSI "$BASE_URL" | grep -qi '^access-control-allow-origin:'
 
+binary_source="$LOG_DIR/binary-echo.ts"
 binary_bundle="$LOG_DIR/binary-echo.bundle.js"
-cat >"$binary_bundle" <<'JS'
-var __ic_edge_bundle = (() => ({
-  default: {
-    fetch: async (request) => new Response(new Uint8Array(await request.arrayBuffer()))
-  }
-}))();
+cat >"$binary_source" <<'JS'
+export default {
+  fetch: async (request) => new Response(new Uint8Array(await request.arrayBuffer()))
+}
 JS
+pack_example "$binary_source" "$binary_bundle"
 upload_example "$binary_bundle"
 expect_contains 'body = blob "\\ff\\00\\80"' call_update POST /binary '\ff\00\80'
 

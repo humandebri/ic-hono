@@ -1,6 +1,7 @@
 //! `examples/canister-template` shows the intended IC HTTP endpoint shape.
-//! Uploaded bundles are evaluated by the runtime when handling HTTP requests.
+//! Uploaded bytecode is evaluated by the runtime when handling HTTP requests.
 
+mod audit_support;
 mod cache_support;
 mod env_support;
 mod history_support;
@@ -10,29 +11,29 @@ mod runtime_cache;
 mod tests;
 
 use candid::CandidType;
-use env_support::{env_assignment, insert_env_name, read_env_names, valid_env_name};
+#[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
+use env_support::env_assignment;
+use env_support::{insert_env_name, read_env_names, valid_env_name};
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 use ic_cdk::management_canister::raw_rand;
 use ic_cdk::management_canister::{HttpRequestResult, TransformArgs};
-#[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
-use ic_edge_canister::handle_cdk_http;
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 use ic_edge_canister::handle_cdk_http_async;
 use ic_edge_canister::{
     https_outcall_fetch_with_replication, CdkHttpRequest, CdkHttpResponse, OutcallReplication,
 };
-#[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
-use ic_edge_runtime::EdgeRuntime;
-#[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
-use ic_edge_runtime::StaticRuntime;
 use ic_edge_store::{EdgeStore, StableEdgeStore};
 use ic_edge_web::{limits, Body, Headers, Request};
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
-use runtime_cache::{store_runtime, take_runtime};
+use runtime_cache::{build_runtime, store_runtime, take_cached_runtime};
+use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use std::cell::RefCell;
 
 const GENERATION_KEY: &str = "__runtime_generation";
+const MODULE_MANIFEST_PREFIX: &str = "__module_manifest:";
 const UPLOAD_BYTES_PREFIX: &str = "__upload_bytes:";
+const UPLOAD_MANIFEST_PREFIX: &str = "__upload_manifest:";
 const UPLOAD_TOTAL_PREFIX: &str = "__upload_total:";
 
 thread_local! {
@@ -43,6 +44,13 @@ thread_local! {
 struct RuntimeInfo {
     backend: String,
     generation: u64,
+    bytecode_sha256: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct UploadManifest {
+    schema_version: u8,
+    bytecode_sha256: String,
 }
 
 #[ic_cdk::query]
@@ -68,37 +76,43 @@ async fn http_request_update(request: CdkHttpRequest) -> CdkHttpResponse {
 }
 
 #[ic_cdk::update]
-fn upload_bundle(module: String, bytes: Vec<u8>) -> Result<(), String> {
+fn upload_bytecode(module: String, bytes: Vec<u8>) -> Result<(), String> {
     ensure_controller()?;
-    STORE.with_borrow_mut(|store| upload_bundle_in_store(store, &module, &bytes))
+    STORE.with_borrow_mut(|store| upload_bytecode_in_store(store, &module, &bytes))
 }
 
 #[ic_cdk::update]
-fn begin_bundle_upload(module: String, total_bytes: u64) -> Result<(), String> {
+fn begin_bytecode_upload(
+    module: String,
+    total_bytes: u64,
+    manifest_json: String,
+) -> Result<(), String> {
     ensure_controller()?;
     let total_bytes = usize::try_from(total_bytes)
-        .map_err(|_| "bundle size does not fit this canister".to_string())?;
-    STORE.with_borrow_mut(|store| begin_bundle_upload_in_store(store, &module, total_bytes))
+        .map_err(|_| "bytecode size does not fit this canister".to_string())?;
+    STORE.with_borrow_mut(|store| {
+        begin_bytecode_upload_in_store(store, &module, total_bytes, &manifest_json)
+    })
 }
 
 #[ic_cdk::update]
-fn append_bundle_chunk(module: String, offset: u64, bytes: Vec<u8>) -> Result<(), String> {
+fn append_bytecode_chunk(module: String, offset: u64, bytes: Vec<u8>) -> Result<(), String> {
     ensure_controller()?;
     let offset = usize::try_from(offset)
         .map_err(|_| "chunk offset does not fit this canister".to_string())?;
-    STORE.with_borrow_mut(|store| append_bundle_chunk_in_store(store, &module, offset, &bytes))
+    STORE.with_borrow_mut(|store| append_bytecode_chunk_in_store(store, &module, offset, &bytes))
 }
 
 #[ic_cdk::update]
-fn commit_bundle_upload(module: String) -> Result<(), String> {
+fn commit_bytecode_upload(module: String) -> Result<(), String> {
     ensure_controller()?;
-    STORE.with_borrow_mut(|store| commit_bundle_upload_in_store(store, &module))
+    STORE.with_borrow_mut(|store| commit_bytecode_upload_in_store(store, &module))
 }
 
 #[ic_cdk::update]
-fn abort_bundle_upload(module: String) -> Result<(), String> {
+fn abort_bytecode_upload(module: String) -> Result<(), String> {
     ensure_controller()?;
-    STORE.with_borrow_mut(|store| abort_bundle_upload_in_store(store, &module))
+    STORE.with_borrow_mut(|store| abort_bytecode_upload_in_store(store, &module))
 }
 
 #[ic_cdk::update]
@@ -136,7 +150,7 @@ fn env_names() -> Vec<String> {
     STORE.with_borrow(read_env_names)
 }
 #[ic_cdk::query]
-fn bundle_size(module: String) -> Option<u64> {
+fn bytecode_size(module: String) -> Option<u64> {
     STORE
         .with_borrow(|store| store.get_module(&module).ok())
         .map(|bytes| bytes.len() as u64)
@@ -146,6 +160,7 @@ fn runtime_info() -> RuntimeInfo {
     RuntimeInfo {
         backend: runtime_backend().to_string(),
         generation: STORE.with_borrow(read_generation),
+        bytecode_sha256: STORE.with_borrow(|store| read_bytecode_sha256(store, "app")),
     }
 }
 #[ic_cdk::query]
@@ -204,16 +219,10 @@ async fn fetch_outcall_with_replication(
 }
 
 #[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
-fn handle_uploaded_bundle(request: CdkHttpRequest) -> ic_edge_web::Result<CdkHttpResponse> {
-    let source = STORE
-        .with_borrow(|store| store.get_module("app"))
-        .map_err(|error| ic_edge_web::Error::Runtime(format!("{error:?}")))?;
-    let source = String::from_utf8(source)
-        .map_err(|error| ic_edge_web::Error::Runtime(error.to_string()))?;
-    let mut runtime = new_runtime()?;
-    runtime.eval_module("env", &env_script()?)?;
-    runtime.eval_module("app", &source)?;
-    handle_cdk_http(&mut runtime, request)
+fn handle_uploaded_bundle(_request: CdkHttpRequest) -> ic_edge_web::Result<CdkHttpResponse> {
+    Err(ic_edge_web::Error::Runtime(
+        "bytecode runtime requires quickjs-ic".to_string(),
+    ))
 }
 
 #[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
@@ -225,13 +234,15 @@ async fn handle_uploaded_bundle_async(
         .map_err(|error| ic_edge_web::Error::Runtime(format!("{error:?}")))?;
     let time_nanos = ic_cdk::api::time();
     let generation = STORE.with_borrow(read_generation);
-    let source = STORE
-        .with_borrow(|store| store.get_module("app"))
-        .map_err(|error| ic_edge_web::Error::Runtime(format!("{error:?}")))?;
-    let source = String::from_utf8(source)
-        .map_err(|error| ic_edge_web::Error::Runtime(error.to_string()))?;
-    let env = env_script()?;
-    let mut runtime = take_runtime(generation, &env, &source)?;
+    let mut runtime = if let Some(runtime) = take_cached_runtime(generation) {
+        runtime
+    } else {
+        let bytecode = STORE
+            .with_borrow(|store| store.get_module("app"))
+            .map_err(|error| ic_edge_web::Error::Runtime(format!("{error:?}")))?;
+        let env = env_script()?;
+        build_runtime(&env, &bytecode)?
+    };
     runtime.install_random_seed(seed)?;
     runtime.install_time_nanos(time_nanos)?;
     runtime.install_ic_context(
@@ -241,11 +252,6 @@ async fn handle_uploaded_bundle_async(
     let response = handle_cdk_http_async(&mut runtime, request).await;
     store_runtime(generation, runtime);
     response
-}
-
-#[cfg(not(all(target_arch = "wasm32", feature = "quickjs-ic")))]
-fn new_runtime() -> ic_edge_web::Result<StaticRuntime> {
-    Ok(StaticRuntime::new())
 }
 
 fn error_response(error: ic_edge_web::Error) -> CdkHttpResponse {
@@ -281,6 +287,7 @@ fn ensure_controller() -> Result<(), String> {
     Ok(())
 }
 
+#[cfg(all(target_arch = "wasm32", feature = "quickjs-ic"))]
 fn env_script() -> ic_edge_web::Result<String> {
     STORE.with_borrow(|store| {
         let mut script = "globalThis.process ||= {}; globalThis.process.env ||= {};".to_string();
@@ -315,32 +322,32 @@ fn bump_generation(store: &mut StableEdgeStore) -> ic_edge_store::Result<u64> {
     Ok(next)
 }
 
-fn upload_bundle_in_store(
+fn upload_bytecode_in_store(
     store: &mut StableEdgeStore,
     module: &str,
     bytes: &[u8],
 ) -> Result<(), String> {
-    if bytes.len() > limits::MAX_BUNDLE_BYTES {
-        return Err("bundle exceeds v1 limit".to_string());
-    }
-    store
-        .put_module(module, bytes)
-        .map_err(|error| format!("{error:?}"))?;
-    abort_bundle_upload_in_store(store, module)?;
-    let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
-    history_support::record_snapshot(store, generation)
+    let _ = store;
+    let _ = module;
+    let _ = bytes;
+    Err("manifest is required".to_string())
 }
 
-fn begin_bundle_upload_in_store(
+fn begin_bytecode_upload_in_store(
     store: &mut StableEdgeStore,
     module: &str,
     total_bytes: usize,
+    manifest_json: &str,
 ) -> Result<(), String> {
     if total_bytes > limits::MAX_BUNDLE_BYTES {
-        return Err("bundle exceeds v1 limit".to_string());
+        return Err("bytecode exceeds v1 limit".to_string());
     }
+    validate_manifest_json(manifest_json)?;
     store
         .put_kv(&upload_bytes_key(module), &[])
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .put_kv(&upload_manifest_key(module), manifest_json.as_bytes())
         .map_err(|error| format!("{error:?}"))?;
     store
         .put_kv(
@@ -350,22 +357,22 @@ fn begin_bundle_upload_in_store(
         .map_err(|error| format!("{error:?}"))
 }
 
-fn append_bundle_chunk_in_store(
+fn append_bytecode_chunk_in_store(
     store: &mut StableEdgeStore,
     module: &str,
     offset: usize,
     bytes: &[u8],
 ) -> Result<(), String> {
     if bytes.len() > limits::MAX_BUNDLE_UPLOAD_CHUNK_BYTES {
-        return Err("bundle chunk exceeds v1 limit".to_string());
+        return Err("bytecode chunk exceeds v1 limit".to_string());
     }
     let total = read_upload_total(store, module)?;
     let mut staged = read_upload_bytes(store, module)?;
     if offset != staged.len() {
-        return Err("bundle chunk offset mismatch".to_string());
+        return Err("bytecode chunk offset mismatch".to_string());
     }
     if staged.len().saturating_add(bytes.len()) > total {
-        return Err("bundle upload exceeds declared size".to_string());
+        return Err("bytecode upload exceeds declared size".to_string());
     }
     staged.extend_from_slice(bytes);
     store
@@ -373,23 +380,37 @@ fn append_bundle_chunk_in_store(
         .map_err(|error| format!("{error:?}"))
 }
 
-fn commit_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
+fn commit_bytecode_upload_in_store(
+    store: &mut StableEdgeStore,
+    module: &str,
+) -> Result<(), String> {
     let total = read_upload_total(store, module)?;
     let staged = read_upload_bytes(store, module)?;
+    let manifest_json = read_upload_manifest(store, module)?;
+    let manifest = validate_manifest_json(&manifest_json)?;
     if staged.len() != total {
-        return Err("bundle upload is incomplete".to_string());
+        return Err("bytecode upload is incomplete".to_string());
+    }
+    if sha256_hex(&staged) != manifest.bytecode_sha256 {
+        return Err("bytecode sha256 does not match manifest".to_string());
     }
     store
         .put_module(module, &staged)
         .map_err(|error| format!("{error:?}"))?;
-    abort_bundle_upload_in_store(store, module)?;
+    store
+        .put_kv(&module_manifest_key(module), manifest_json.as_bytes())
+        .map_err(|error| format!("{error:?}"))?;
+    abort_bytecode_upload_in_store(store, module)?;
     let generation = bump_generation(store).map_err(|error| format!("{error:?}"))?;
     history_support::record_snapshot(store, generation)
 }
 
-fn abort_bundle_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
+fn abort_bytecode_upload_in_store(store: &mut StableEdgeStore, module: &str) -> Result<(), String> {
     store
         .delete_kv(&upload_bytes_key(module))
+        .map_err(|error| format!("{error:?}"))?;
+    store
+        .delete_kv(&upload_manifest_key(module))
         .map_err(|error| format!("{error:?}"))?;
     store
         .delete_kv(&upload_total_key(module))
@@ -400,7 +421,7 @@ fn read_upload_total(store: &StableEdgeStore, module: &str) -> Result<usize, Str
     let bytes = store
         .get_kv(&upload_total_key(module))
         .map_err(|error| format!("{error:?}"))?
-        .ok_or_else(|| "bundle upload has not started".to_string())?;
+        .ok_or_else(|| "bytecode upload has not started".to_string())?;
     let value = String::from_utf8(bytes).map_err(|error| error.to_string())?;
     value.parse::<usize>().map_err(|error| error.to_string())
 }
@@ -409,11 +430,78 @@ fn read_upload_bytes(store: &StableEdgeStore, module: &str) -> Result<Vec<u8>, S
     store
         .get_kv(&upload_bytes_key(module))
         .map_err(|error| format!("{error:?}"))?
-        .ok_or_else(|| "bundle upload has not started".to_string())
+        .ok_or_else(|| "bytecode upload has not started".to_string())
+}
+
+fn read_upload_manifest(store: &StableEdgeStore, module: &str) -> Result<String, String> {
+    let bytes = store
+        .get_kv(&upload_manifest_key(module))
+        .map_err(|error| format!("{error:?}"))?
+        .ok_or_else(|| "bytecode upload has not started".to_string())?;
+    String::from_utf8(bytes).map_err(|error| error.to_string())
+}
+
+fn validate_manifest_json(manifest_json: &str) -> Result<UploadManifest, String> {
+    let manifest: UploadManifest =
+        serde_json::from_str(manifest_json).map_err(|error| error.to_string())?;
+    if manifest.schema_version != 2 {
+        return Err("unsupported manifest schema_version".to_string());
+    }
+    if manifest.bytecode_sha256.len() != 64
+        || !manifest
+            .bytecode_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err("manifest bytecode_sha256 must be lowercase sha256 hex".to_string());
+    }
+    Ok(manifest)
+}
+
+fn read_bytecode_sha256(store: &StableEdgeStore, module: &str) -> Option<String> {
+    let bytes = store.get_kv(&module_manifest_key(module)).ok().flatten()?;
+    let manifest: UploadManifest = serde_json::from_slice(&bytes).ok()?;
+    Some(manifest.bytecode_sha256)
+}
+
+pub(crate) fn read_module_manifest(store: &StableEdgeStore, module: &str) -> Vec<u8> {
+    store
+        .get_kv(&module_manifest_key(module))
+        .ok()
+        .flatten()
+        .unwrap_or_default()
+}
+
+pub(crate) fn put_module_manifest(
+    store: &mut StableEdgeStore,
+    module: &str,
+    manifest: &[u8],
+) -> Result<(), String> {
+    if manifest.is_empty() {
+        return store
+            .delete_kv(&module_manifest_key(module))
+            .map_err(|error| format!("{error:?}"));
+    }
+    store
+        .put_kv(&module_manifest_key(module), manifest)
+        .map_err(|error| format!("{error:?}"))
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    let digest = Sha256::digest(bytes);
+    digest.iter().map(|byte| format!("{byte:02x}")).collect()
+}
+
+fn module_manifest_key(module: &str) -> String {
+    format!("{MODULE_MANIFEST_PREFIX}{}:{module}", module.len())
 }
 
 fn upload_bytes_key(module: &str) -> String {
     format!("{UPLOAD_BYTES_PREFIX}{}:{module}", module.len())
+}
+
+fn upload_manifest_key(module: &str) -> String {
+    format!("{UPLOAD_MANIFEST_PREFIX}{}:{module}", module.len())
 }
 
 fn upload_total_key(module: &str) -> String {

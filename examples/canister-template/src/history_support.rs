@@ -1,7 +1,7 @@
 //! `examples/canister-template` stores runtime generations for rollback.
-//! Each snapshot captures the app bundle and env values as one unit.
+//! Each snapshot captures the app bytecode and env values as one unit.
 
-use crate::{bump_generation, read_generation};
+use crate::{bump_generation, put_module_manifest, read_generation, read_module_manifest};
 use candid::CandidType;
 use ic_edge_store::{EdgeStore, StableEdgeStore};
 use ic_edge_web::limits;
@@ -12,21 +12,24 @@ const HISTORY_KEY: &str = "__runtime_history";
 #[derive(CandidType)]
 pub(crate) struct RuntimeSnapshotInfo {
     pub(crate) generation: u64,
-    pub(crate) bundle_bytes: u64,
+    pub(crate) bytecode_bytes: u64,
+    pub(crate) manifest_bytes: u64,
     pub(crate) env_names: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize)]
 struct RuntimeSnapshot {
     generation: u64,
-    bundle: Vec<u8>,
+    bytecode: Vec<u8>,
+    manifest: Vec<u8>,
     env: Vec<(String, String)>,
 }
 
 pub(crate) fn record_snapshot(store: &mut StableEdgeStore, generation: u64) -> Result<(), String> {
     let snapshot = RuntimeSnapshot {
         generation,
-        bundle: store.get_module("app").unwrap_or_default(),
+        bytecode: store.get_module("app").unwrap_or_default(),
+        manifest: read_module_manifest(store, "app"),
         env: read_env(store)?,
     };
     let bytes = serde_json::to_vec(&snapshot).map_err(|error| error.to_string())?;
@@ -51,7 +54,8 @@ pub(crate) fn runtime_history(store: &StableEdgeStore) -> Vec<RuntimeSnapshotInf
         .filter_map(|generation| read_snapshot(store, generation).ok())
         .map(|snapshot| RuntimeSnapshotInfo {
             generation: snapshot.generation,
-            bundle_bytes: snapshot.bundle.len() as u64,
+            bytecode_bytes: snapshot.bytecode.len() as u64,
+            manifest_bytes: snapshot.manifest.len() as u64,
             env_names: snapshot.env.into_iter().map(|(name, _)| name).collect(),
         })
         .collect()
@@ -60,8 +64,9 @@ pub(crate) fn runtime_history(store: &StableEdgeStore) -> Vec<RuntimeSnapshotInf
 pub(crate) fn rollback(store: &mut StableEdgeStore, generation: u64) -> Result<(), String> {
     let snapshot = read_snapshot(store, generation)?;
     store
-        .put_module("app", &snapshot.bundle)
+        .put_module("app", &snapshot.bytecode)
         .map_err(|error| format!("{error:?}"))?;
+    put_module_manifest(store, "app", &snapshot.manifest)?;
     for name in crate::read_env_names(store) {
         store
             .delete_kv(&format!("env:{name}"))

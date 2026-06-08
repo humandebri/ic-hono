@@ -32,6 +32,9 @@ jobs:
           npm install --prefix examples/hono-openai
           npm install --prefix examples/hono-upstash
           npm install --prefix examples/hono-jose
+          npm install --prefix examples/hono-status
+          npm install --prefix examples/hono-suite
+          npm install --prefix examples/hono-x402-paid-api
       - name: Rust format
         run: cargo fmt --all --check
       - name: Rust tests

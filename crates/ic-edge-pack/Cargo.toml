@@ -17,6 +17,9 @@ ic-edge-loader = { version = "0.2.0", path = "../ic-edge-loader" }
 ic-edge-runtime = { version = "0.2.0", path = "../ic-edge-runtime" }
 ic-edge-store = { version = "0.2.0", path = "../ic-edge-store" }
 ic-edge-web = { version = "0.2.0", path = "../ic-edge-web" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
 
 [[bin]]
 name = "ic-edge"

@@ -34,6 +34,7 @@ for item in \
   AsyncHostFetch \
   HostFetchOptions \
   CacheHost \
+  AuditHost \
   QuickJsRuntime \
   CdkHttpRequest \
   CdkHttpResponse \
@@ -48,10 +49,10 @@ for item in \
   "ic-edge init hono" \
   "ic-edge pack" \
   "ic-edge upload" \
-  begin_bundle_upload \
-  append_bundle_chunk \
-  commit_bundle_upload \
-  abort_bundle_upload \
+  begin_bytecode_upload \
+  append_bytecode_chunk \
+  commit_bytecode_upload \
+  abort_bytecode_upload \
   runtime_history \
   rollback_runtime \
   fetch_outcall_replicated \
@@ -62,7 +63,7 @@ do
   require_contract "$item"
 done
 
-for item in EdgeRuntime AsyncEdgeRuntime AsyncHostFetch CacheHost; do
+for item in EdgeRuntime AsyncEdgeRuntime AsyncHostFetch CacheHost AuditHost; do
   require_source "trait $item" "crates/ic-edge-runtime/src/lib.rs"
 done
 

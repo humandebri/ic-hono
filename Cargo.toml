@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "crates/ic-edge-bytecode-compiler",
     "crates/ic-edge-web",
     "crates/ic-edge-runtime",
     "crates/ic-edge-store",

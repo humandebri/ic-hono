@@ -26,18 +26,18 @@ pub trait AsyncEdgeRuntime {
 ```
 
 host `QuickJsRuntime` は `rquickjs` で bundle を eval し、`app.fetch(request)` を呼ぶ。
-canister build は `quickjs-ic` feature のみを使う。`wasm32-wasip1` build、WASI import stub、`wasi2ic` 変換を行う。
+canister build は `quickjs-ic` feature のみを使う。`wasm32-wasip1` build、WASI import stub、`wasi2ic` 変換を行う。canister へ upload する app artifact は QuickJS bytecode。
 
 ## Bundle Contract
 
-v0.1 は ESM loader ではなく IIFE bundle を使う。`ic-edge pack` は local `esbuild` を実行し、この形を生成する。
+v0.2 は ESM loader ではなく IIFE bundle を中間成果物に使う。`ic-edge pack` は local `esbuild` で bundle を生成し、canister と同じ `quickjs-wasm-rs` 系の WASI helper で QuickJS bytecode を生成する。`wasmtime` CLI が必要。
 
 ```bash
 ic-edge pack src/app.ts --out dist/app.bundle.js
 ```
 
-CLI は esbuild を `--bundle --format=iife --global-name=__ic_edge_bundle --platform=neutral --conditions=browser,worker,import --target=es2018 --minify` で実行する。
-CLI は出力 bundle を QuickJS runtime で eval し、`globalThis.__ic_edge_bundle.default.fetch` が function であることを検査する。runtime は eval 後に次の値を app として扱う。
+CLI は esbuild を `--bundle --format=iife --global-name=__ic_edge_bundle --platform=neutral --conditions=browser,worker,import --target=es2018 --sourcemap=external` で実行する。
+CLI は出力 bundle を QuickJS runtime で eval し、`globalThis.__ic_edge_bundle.default.fetch` が function であることを検査する。bytecode 隣接の `<bytecode>.ic-edge-manifest.json` に `bytecode_sha256` / `source_bundle_sha256` / `source_map_sha256` と esbuild args を記録する。runtime は bytecode eval 後に次の値を app として扱う。
 
 ```ts
 globalThis.__ic_edge_bundle.default
@@ -76,6 +76,7 @@ npm run build
 - `atob` 最小実装
 - `process.env` read-only 相当
 - `ic.caller()` / `ic.time()` / `ic.canisterId()` local placeholder
+- `ic.audit.reserve/commit/fail/get/list/root`
 
 `Request.text()`、`Request.json()`、`Request.arrayBuffer()`、`Request.formData()`、`Response.text()`、`Response.json()`、`Response.arrayBuffer()`、`Response.formData()` は Promise を返す。body read 後は `bodyUsed` が true になり、再 read と `clone()` は `TypeError` を投げる。
 
@@ -88,6 +89,8 @@ v0.2 host runtime は `Request` / `Response` / `Blob` body に `Uint8Array`、ty
 Streams は v1 対象外。`ReadableStream` / `WritableStream` / `TransformStream` は提供しない。
 
 Cache API は `match` / `put` / `delete` と `caches.open` の subset。canister では stable memory KV に保存する。storage key は `cache:` prefix と JSON tuple `[cache_name,"GET",normalized_url]` で構造化し、cache 名 / URL 境界の衝突を避ける。`Cache-Control: max-age=N` は expiration として扱う。`cache.put()` は `Set-Cookie` response を拒否する。Range、conditional request は対象外。
+
+`ic.audit` は canister-local append-only audit log。`reserve(id, payloadJson)` は外部 settlement 前の replay lock、`commit(id, payloadJson)` は成功 final event、`fail(id, payloadJson)` は失敗 final event を追記する。`get(id)`、`list(offset, limit)`、`root()` は JSON 値を返す。canister では `StableLog<Vec<u8>>`、`StableBTreeMap<String,u64>`、hash root を stable memory に保存する。host runtime は deterministic memory host を使う。
 
 canister `quickjs-ic` backend は crypto callback を Rust 側に登録する。`getRandomValues` は `http_request_update` 開始時に取得した `raw_rand` seed を使う。対象は integer TypedArray。`byteLength` 分を埋め、65,536 bytes 超過と TypedArray 以外は error。
 
@@ -114,30 +117,30 @@ canister から渡る path-only URL は runtime 内で仮 origin に正規化す
 
 `ic-edge-canister` は `wasm32-unknown-unknown` build 済み。
 
-`examples/canister-template` は `http_request` / `http_request_update` と bundle upload 入口を持つ。
+`examples/canister-template` は `http_request` / `http_request_update` と bytecode upload 入口を持つ。
 
 `icp.yaml` は `scripts/build_canister_backend_wasm.sh` を使う。script は `wasi_snapshot_preview1.*` import を stub 化してから `wasi2ic` で IC canister Wasm へ変換する。
 
 v0.2 の QuickJS backend 調査では DFINITY [`ic-quickjs-demo`](https://github.com/dfinity/ic-quickjs-demo) を第一参照にする。比較結果は [`quickjs-backend-comparison.md`](quickjs-backend-comparison.md) に記録する。
 
-## Bundle Upload
+## Bytecode Upload
 
 `ic-edge-pack` は local upload contract を持つ。
 
 ```bash
-ic-edge upload dist/app.bundle.js --module app
-ic-edge upload dist/app.bundle.js --module app --canister edge --environment local
+ic-edge upload dist/app.qjbc --module app
+ic-edge upload dist/app.qjbc --module app --canister edge --environment local
 ```
 
-`--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `begin_bundle_upload`、`append_bundle_chunk`、`commit_bundle_upload` を使う。chunk size は 512 KiB。失敗時は `abort_bundle_upload` を試行する。
+`ic-edge upload` は bytecode 隣接 manifest、bundle、source map を必須検証する。`--canister` なしでは local `MemoryEdgeStore` へ保存する。`--canister` 指定時は `begin_bytecode_upload(module, total_bytes, manifest_json)`、`append_bytecode_chunk`、`commit_bytecode_upload` を使う。chunk size は 512 KiB。失敗時は `abort_bytecode_upload` を試行する。
 
-canister template 側は small/direct/debug 互換用 `upload_bundle(module, bytes)`、chunk upload 用 `begin_bundle_upload(module, total_bytes)` / `append_bundle_chunk(module, offset, bytes)` / `commit_bundle_upload(module)` / `abort_bundle_upload(module)`、`bundle_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。CLI 標準経路は chunk upload。mutation API と `fetch_outcall(url)` は controller 限定。
-通信断などで staging KV が残っても runtime module には反映しない。次回同一 module の `begin_bundle_upload` または direct `upload_bundle` が既存 staging を破棄する。staging 一覧と掃除 API は v1 preview 対象外。
-`runtime_info()` は runtime backend 名と cache invalidation 用 generation を返す。generation は `upload_bundle`、`commit_bundle_upload`、`set_env` 成功時に増加し、canister upgrade では維持される。
+canister template 側は manifest なし raw upload を拒否する `upload_bytecode(module, bytes)`、chunk upload 用 `begin_bytecode_upload(module, total_bytes, manifest_json)` / `append_bytecode_chunk(module, offset, bytes)` / `commit_bytecode_upload(module)` / `abort_bytecode_upload(module)`、`bytecode_size(module)`、`set_env(name, value)`、`env_names()`、`runtime_info()`、`runtime_history()`、`rollback_runtime(generation)`、direct smoke 用 `fetch_outcall(url)` を公開する。mutation API と `fetch_outcall(url)` は controller 限定。
+通信断などで staging KV が残っても runtime module には反映しない。次回同一 module の `begin_bytecode_upload` が既存 staging を破棄する。staging 一覧と掃除 API は v1 preview 対象外。
+`runtime_info()` は runtime backend 名、cache invalidation 用 generation、現在の `bytecode_sha256` を返す。generation は `commit_bytecode_upload`、`set_env` 成功時に増加し、canister upgrade では維持される。
 
-`quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`upload_bundle()`、`commit_bundle_upload()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。
+`quickjs-ic` backend は canister global の generation-scoped runtime cache を使う。同じ generation の連続 `http_request_update` は既存 QuickJS runtime を再利用し、`commit_bytecode_upload()`、`set_env()`、`rollback_runtime()` 後は generation mismatch により runtime を再生成する。
 
-`rollback_runtime(generation)` は直近 5 世代の bundle/env snapshot から復元し、復元後に新しい generation を発行する。
+`rollback_runtime(generation)` は直近 5 世代の bytecode/env/manifest snapshot から復元し、復元後に新しい generation を発行する。
 
 OpenAI / Upstash のような HTTPS outcall 用 secret は bundle に埋め込まず、deploy 後に注入する。
 
@@ -147,7 +150,7 @@ icp canister call edge set_env '("UPSTASH_REDIS_REST_URL", "https://...")' --env
 icp canister call edge set_env '("UPSTASH_REDIS_REST_TOKEN", "...")' --environment local
 ```
 
-`ic-edge-store` は `MemoryEdgeStore` と `StableEdgeStore` を持つ。`StableEdgeStore` は `ic-stable-structures 0.7.2` の `MemoryManager` と 2 つの `StableBTreeMap` で module/KV を分離する。
+`ic-edge-store` は `MemoryEdgeStore` と `StableEdgeStore` を持つ。`StableEdgeStore` は `ic-stable-structures 0.7.2` の `MemoryManager` で module/KV/audit memory を分離する。memory ID は module/KV が 0/1、audit log/index/root が 2/3/4/5。
 
 ## Fetch Bridge
 
@@ -161,6 +164,20 @@ pub trait HostFetch {
 
 `QuickJsRuntime::install_fetch()` で JS `fetch()` から Rust handler を呼ぶ。ICP では同じ境界を HTTPS outcalls に接続する。
 canister runtime の `AsyncHostFetch` は `HostFetchOptions { replicated }` を受け取る。JS は `fetch(url, { ic: { replicated: true } })` で複製 outcall を選ぶ。未指定は非複製。
+
+TypeScript で `ic.replicated` を使う既存アプリは ambient declaration を追加する。`ic-edge init hono` は同じ宣言を生成する。
+
+```ts
+declare global {
+  interface RequestInit {
+    ic?: { replicated?: boolean }
+  }
+
+  interface Request {
+    ic?: { replicated: boolean }
+  }
+}
+```
 
 `ic-edge-canister` は HTTPS outcalls adapter を持つ。
 

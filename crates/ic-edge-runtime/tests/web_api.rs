@@ -739,3 +739,38 @@ fn response_headers_blob_and_text_decoder_follow_web_contracts() {
         r#"{"contentType":"application/problem+json","blobBytes":[255,0,128],"replacement":"�","decodedBuffer":"ok","invalidStatusError":"RangeError","invalidHeaderError":"TypeError","invalidHeaderValueError":"TypeError"}"#
     );
 }
+
+#[test]
+fn ic_audit_reserve_commit_list_and_root() {
+    let mut runtime = QuickJsRuntime::new().unwrap();
+    runtime
+        .eval_module(
+            "app",
+            "globalThis.__ic_edge_app = { fetch: async () => {
+                const before = ic.audit.root()
+                const reserved = ic.audit.reserve('r1', JSON.stringify({ paymentSignatureHash: 'sig' }))
+                const committed = ic.audit.commit('r1', JSON.stringify({ payerHash: 'payer', resultDigest: 'digest' }))
+                let replay = ''
+                try {
+                  ic.audit.reserve('r1', '{}')
+                } catch (error) {
+                  replay = error.name
+                }
+                return Response.json({
+                  beforeCount: before.count,
+                  reservedKind: reserved.kind,
+                  committedKind: committed.kind,
+                  latestKind: ic.audit.get('r1').kind,
+                  listLength: ic.audit.list(0, 10).length,
+                  rootChanged: ic.audit.root().root !== before.root,
+                  replay
+                })
+            } }",
+        )
+        .unwrap();
+    let response = runtime.call_app_fetch(req("GET", "/", b"")).unwrap();
+    assert_eq!(
+        response.body.text().unwrap(),
+        r#"{"beforeCount":0,"reservedKind":"reserve","committedKind":"commit","latestKind":"commit","listLength":2,"rootChanged":true,"replay":"TypeError"}"#
+    );
+}

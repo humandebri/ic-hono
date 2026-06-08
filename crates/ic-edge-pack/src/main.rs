@@ -1,7 +1,11 @@
 //! `crates/ic-edge-pack` provides the first CLI surface.
 //! It runs a local bundler and checks the runtime bundle contract.
 
-use ic_edge_pack::{default_out_file, manifest_for_request, upload_bundle, PackRequest};
+use ic_edge_pack::{
+    artifact_manifest, bytecode_path_for_bundle, default_out_file, esbuild_args,
+    manifest_for_request, upload_bytecode, verified_artifact_manifest, write_artifact_manifest,
+    PackRequest,
+};
 use ic_edge_runtime::validate_bundle_contract as validate_runtime_bundle_contract;
 use ic_edge_store::{EdgeStore, MemoryEdgeStore};
 use ic_edge_web::limits;
@@ -9,6 +13,8 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+
+const BYTECODE_COMPILER_WASM: &[u8] = include_bytes!("../assets/ic-edge-bytecode-compiler.wasm");
 
 fn main() {
     match run(env::args().skip(1).collect()) {
@@ -26,7 +32,7 @@ fn run(args: Vec<String>) -> Result<String, String> {
         Some("pack") => pack_command(&args[1..]),
         Some("upload") => upload_command(&args[1..]),
         _ => Err(
-            "usage: ic-edge init hono [directory]\n       ic-edge pack <entrypoint> [--out <file>]\n       ic-edge upload <bundle.js> [--module <name>] [--canister <name>] [--environment <name>]"
+            "usage: ic-edge init hono [directory]\n       ic-edge pack <entrypoint> [--out <bundle.js>]\n       ic-edge upload <app.qjbc> [--module <name>] [--canister <name>] [--environment <name>]"
                 .to_string(),
         ),
     }
@@ -104,7 +110,7 @@ export default app
 ```bash
 npm install
 npm run build
-ic-edge upload dist/app.bundle.js --canister edge --environment local
+ic-edge upload dist/app.qjbc --canister edge --environment local
 ```
 "#,
     )?;
@@ -129,34 +135,59 @@ fn pack_command(args: &[String]) -> Result<String, String> {
         entrypoint,
         out_file: out_file.to_string_lossy().to_string(),
     });
-    run_esbuild(&manifest.entrypoint, &manifest.bundle_path)?;
+    let esbuild_args = run_esbuild(&manifest.entrypoint, &manifest.bundle_path)?;
     validate_bundle_contract(&manifest.bundle_path)?;
-    Ok(format!("packed {}", manifest.bundle_path))
+    let bytecode_path = bytecode_path_for_bundle(Path::new(&manifest.bundle_path));
+    compile_bundle_bytecode(Path::new(&manifest.bundle_path), &bytecode_path)?;
+    let artifact = artifact_manifest(
+        &manifest.entrypoint,
+        Path::new(&manifest.bundle_path),
+        &bytecode_path,
+        esbuild_args,
+    )?;
+    write_artifact_manifest(&artifact)?;
+    Ok(format!("packed {}", bytecode_path.display()))
 }
 
 fn upload_command(args: &[String]) -> Result<String, String> {
-    let bundle_path = args
+    let bytecode_path = args
         .first()
-        .ok_or_else(|| "missing bundle path".to_string())?;
+        .ok_or_else(|| "missing bytecode path".to_string())?;
+    if Path::new(bytecode_path)
+        .extension()
+        .and_then(|value| value.to_str())
+        != Some("qjbc")
+    {
+        return Err("upload expects a .qjbc bytecode artifact".to_string());
+    }
     let module = parse_module(args)?.unwrap_or_else(|| "app".to_string());
-    let bytes = fs::read(bundle_path).map_err(|error| error.to_string())?;
+    let manifest = verified_artifact_manifest(Path::new(bytecode_path))?;
+    let bytes = fs::read(bytecode_path).map_err(|error| error.to_string())?;
     if bytes.len() > limits::MAX_BUNDLE_BYTES {
-        return Err("bundle exceeds v1 limit".to_string());
+        return Err("bytecode exceeds v1 limit".to_string());
     }
     if let Some(canister) = parse_canister(args)? {
-        upload_to_canister(&canister, parse_environment(args)?, &module, &bytes)?;
+        upload_to_canister(
+            &canister,
+            parse_environment(args)?,
+            &module,
+            &bytes,
+            &manifest,
+        )?;
         return Ok(format!(
-            "uploaded {} bytes to canister {canister} module {module}",
+            "uploaded {} bytecode bytes to canister {canister} module {module}",
             bytes.len()
         ));
     }
     let mut store = MemoryEdgeStore::new();
-    upload_bundle(&mut store, &module, &bytes).map_err(|error| format!("{error:?}"))?;
+    upload_bytecode(&mut store, &module, &bytes).map_err(|error| format!("{error:?}"))?;
     let stored_len = store
         .get_module(&module)
         .map_err(|error| format!("{error:?}"))?
         .len();
-    Ok(format!("uploaded {stored_len} bytes to module {module}"))
+    Ok(format!(
+        "uploaded {stored_len} bytecode bytes to module {module}"
+    ))
 }
 
 fn upload_to_canister(
@@ -164,12 +195,14 @@ fn upload_to_canister(
     environment: Option<String>,
     module: &str,
     bytes: &[u8],
+    manifest: &ic_edge_pack::BundleArtifactManifest,
 ) -> Result<(), String> {
+    let manifest_json = serde_json::to_string(manifest).map_err(|error| error.to_string())?;
     call_canister(
         canister,
         environment.as_deref(),
-        "begin_bundle_upload",
-        &candid_begin_upload_argument(module, bytes.len())?,
+        "begin_bytecode_upload",
+        &candid_begin_upload_argument(module, bytes.len(), &manifest_json)?,
     )?;
     let mut offset = 0usize;
     while offset < bytes.len() {
@@ -179,14 +212,14 @@ fn upload_to_canister(
         call_canister(
             canister,
             environment.as_deref(),
-            "append_bundle_chunk",
+            "append_bytecode_chunk",
             &candid_append_chunk_argument(module, offset, &bytes[offset..end])?,
         )
         .map_err(|error| {
             let _ = call_canister(
                 canister,
                 environment.as_deref(),
-                "abort_bundle_upload",
+                "abort_bytecode_upload",
                 &candid_module_argument(module),
             );
             error
@@ -196,7 +229,7 @@ fn upload_to_canister(
     call_canister(
         canister,
         environment.as_deref(),
-        "commit_bundle_upload",
+        "commit_bytecode_upload",
         &candid_module_argument(module),
     )
     .map_err(|error| abort_after_upload_error(canister, environment.as_deref(), module, error))
@@ -211,7 +244,7 @@ fn abort_after_upload_error(
     let _ = call_canister(
         canister,
         environment,
-        "abort_bundle_upload",
+        "abort_bytecode_upload",
         &candid_module_argument(module),
     );
     error
@@ -271,10 +304,14 @@ fn command_output_error(stdout: &[u8], stderr: &[u8]) -> String {
     "empty icp canister call response".to_string()
 }
 
-fn candid_begin_upload_argument(module: &str, total_bytes: usize) -> Result<String, String> {
+fn candid_begin_upload_argument(
+    module: &str,
+    total_bytes: usize,
+    manifest_json: &str,
+) -> Result<String, String> {
     let total =
-        u64::try_from(total_bytes).map_err(|_| "bundle length does not fit nat64".to_string())?;
-    Ok(format!("({module:?}, {total} : nat64)"))
+        u64::try_from(total_bytes).map_err(|_| "bytecode length does not fit nat64".to_string())?;
+    Ok(format!("({module:?}, {total} : nat64, {manifest_json:?})"))
 }
 
 fn candid_append_chunk_argument(
@@ -306,24 +343,15 @@ fn candid_blob(bytes: &[u8]) -> String {
     format!("blob \"{escaped}\"")
 }
 
-fn run_esbuild(entrypoint: &str, bundle_path: &str) -> Result<(), String> {
+fn run_esbuild(entrypoint: &str, bundle_path: &str) -> Result<Vec<String>, String> {
     let esbuild = find_esbuild(Path::new(entrypoint));
+    let args = esbuild_args(entrypoint, bundle_path);
     let output = Command::new(esbuild)
-        .args([
-            entrypoint,
-            "--bundle",
-            "--format=iife",
-            "--global-name=__ic_edge_bundle",
-            "--platform=neutral",
-            "--conditions=browser,worker,import",
-            "--target=es2018",
-            "--minify",
-            &format!("--outfile={bundle_path}"),
-        ])
+        .args(&args)
         .output()
         .map_err(|error| error.to_string())?;
     if output.status.success() {
-        Ok(())
+        Ok(args)
     } else {
         Err(String::from_utf8_lossy(&output.stderr).trim().to_string())
     }
@@ -352,6 +380,69 @@ fn find_esbuild(entrypoint: &Path) -> PathBuf {
 fn validate_bundle_contract(bundle_path: &str) -> Result<(), String> {
     let source = fs::read_to_string(bundle_path).map_err(|error| error.to_string())?;
     validate_runtime_bundle_contract(&source).map_err(|error| format!("{error:?}"))
+}
+
+#[cfg(not(test))]
+fn compile_bundle_bytecode(bundle_path: &Path, bytecode_path: &Path) -> Result<(), String> {
+    let compiler_wasm = bytecode_compiler_wasm()?;
+    let wasmtime = env::var("IC_EDGE_WASMTIME").unwrap_or_else(|_| "wasmtime".to_string());
+    let mut command = Command::new(wasmtime);
+    preopen_parent_dir(&mut command, bundle_path);
+    preopen_parent_dir(&mut command, bytecode_path);
+    let output = command
+        .arg(&compiler_wasm)
+        .arg(bundle_path)
+        .arg(bytecode_path)
+        .output()
+        .map_err(|error| format!("failed to run wasmtime; install wasmtime CLI: {error}"))?;
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(command_output_error(&output.stdout, &output.stderr))
+    }
+}
+
+#[cfg(test)]
+fn compile_bundle_bytecode(bundle_path: &Path, bytecode_path: &Path) -> Result<(), String> {
+    let bytes = fs::read(bundle_path).map_err(|error| error.to_string())?;
+    fs::write(bytecode_path, bytes).map_err(|error| error.to_string())
+}
+
+#[cfg(not(test))]
+fn preopen_parent_dir(command: &mut Command, path: &Path) {
+    command.arg("--dir").arg(preopen_dir_for_path(path));
+}
+
+#[cfg(not(test))]
+fn bytecode_compiler_wasm() -> Result<PathBuf, String> {
+    bytecode_compiler_wasm_with_override(env::var("IC_EDGE_BYTECODE_COMPILER_WASM").ok())
+}
+
+fn bytecode_compiler_wasm_with_override(override_path: Option<String>) -> Result<PathBuf, String> {
+    if let Some(path) = override_path.filter(|path| !path.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+    materialize_bundled_bytecode_compiler_wasm()
+}
+
+fn materialize_bundled_bytecode_compiler_wasm() -> Result<PathBuf, String> {
+    let path = env::temp_dir().join(format!(
+        "ic-edge-bytecode-compiler-{}.wasm",
+        env!("CARGO_PKG_VERSION")
+    ));
+    let needs_write = fs::read(&path)
+        .map(|bytes| bytes != BYTECODE_COMPILER_WASM)
+        .unwrap_or(true);
+    if needs_write {
+        fs::write(&path, BYTECODE_COMPILER_WASM).map_err(|error| error.to_string())?;
+    }
+    Ok(path)
+}
+
+fn preopen_dir_for_path(path: &Path) -> &Path {
+    path.parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or_else(|| Path::new("."))
 }
 
 fn parse_out_file(args: &[String]) -> Result<Option<PathBuf>, String> {

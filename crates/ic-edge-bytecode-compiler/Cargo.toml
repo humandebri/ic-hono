@@ -1,0 +1,21 @@
+[package]
+name = "ic-edge-bytecode-compiler"
+version = "0.2.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+rust-version.workspace = true
+description = "WASI helper that compiles ic-edge JavaScript bundles to QuickJS bytecode."
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+quickjs-wasm-rs = "3.1.0"
+
+[[bin]]
+name = "ic-edge-bytecode-compiler"
+path = "src/main.rs"

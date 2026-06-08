@@ -2,10 +2,11 @@
 //! It uses a prebuilt QuickJS wasm binding to avoid a C toolchain in canister builds.
 
 use crate::{
-    crypto_polyfill, fetch_queue_polyfill, json_polyfill, quickjs_wasm_cache, quickjs_wasm_crypto,
+    audit_polyfill, crypto_polyfill, fetch_queue_polyfill, json_polyfill, quickjs_wasm_audit,
+    quickjs_wasm_cache, quickjs_wasm_crypto,
     quickjs_wasm_types::{HeaderPairs, RuntimeFetchRequest, RuntimeResponse},
     web_cache_polyfill, web_dispatch_polyfill, web_polyfill, web_url_polyfill, AsyncEdgeRuntime,
-    AsyncHostFetch, CacheHost, EdgeRuntime,
+    AsyncHostFetch, AuditHost, CacheHost, EdgeRuntime,
 };
 use ic_edge_web::{limits, Error, Request, Response, Result};
 use quickjs_wasm_rs::JSContextRef;
@@ -19,6 +20,7 @@ pub struct QuickJsRuntime {
     context: JSContextRef,
     async_fetcher: Option<Box<dyn AsyncHostFetch>>,
     cache_host: Rc<RefCell<Option<Box<dyn CacheHost>>>>,
+    audit_host: Rc<RefCell<Option<Box<dyn AuditHost>>>>,
 }
 
 impl QuickJsRuntime {
@@ -28,6 +30,7 @@ impl QuickJsRuntime {
             context: JSContextRef::default(),
             async_fetcher: None,
             cache_host: Rc::new(RefCell::new(None)),
+            audit_host: Rc::new(RefCell::new(None)),
         };
         runtime.install_web_polyfill()?;
         Ok(runtime)
@@ -47,6 +50,14 @@ impl QuickJsRuntime {
         C: CacheHost + 'static,
     {
         *self.cache_host.borrow_mut() = Some(Box::new(cache));
+    }
+
+    /// Installs an audit persistence backend.
+    pub fn install_audit<A>(&mut self, audit: A)
+    where
+        A: AuditHost + 'static,
+    {
+        *self.audit_host.borrow_mut() = Some(Box::new(audit));
     }
 
     /// Installs the per-request random seed used by `crypto.getRandomValues`.
@@ -91,27 +102,48 @@ impl QuickJsRuntime {
     fn install_web_polyfill(&self) -> Result<()> {
         quickjs_wasm_crypto::install_callbacks(&self.context)?;
         quickjs_wasm_cache::install(&self.context, Rc::clone(&self.cache_host))?;
+        quickjs_wasm_audit::install(&self.context, Rc::clone(&self.audit_host))?;
+        self.eval_global("crypto.js", crypto_polyfill::SOURCE)?;
+        self.eval_global("json.js", json_polyfill::SOURCE)?;
+        self.eval_global("web.js", web_polyfill::SOURCE)?;
+        self.eval_global("audit.js", audit_polyfill::SOURCE)?;
+        self.eval_global("web-url.js", web_url_polyfill::SOURCE)?;
+        self.eval_global("web-cache.js", web_cache_polyfill::SOURCE)?;
+        self.eval_global("web-dispatch.js", web_dispatch_polyfill::SOURCE)?;
+        self.eval_global("fetch-queue.js", fetch_queue_polyfill::SOURCE)?;
+        Ok(())
+    }
+
+    fn eval_global(&self, name: &str, source: &str) -> Result<()> {
         self.context
-            .eval_global("crypto.js", crypto_polyfill::SOURCE)
+            .eval_global(name, source)
+            .map(|_| ())
+            .map_err(to_runtime_error)
+    }
+
+    /// Evaluates QuickJS bytecode produced by the ic-edge bytecode compiler.
+    pub fn eval_bytecode(&mut self, bytecode: &[u8]) -> Result<()> {
+        self.context
+            .eval_binary(bytecode)
             .map_err(to_runtime_error)?;
         self.context
-            .eval_global("json.js", json_polyfill::SOURCE)
+            .eval_global(
+                "app-default.js",
+                "if (globalThis.__ic_edge_bundle?.default) globalThis.__ic_edge_app = globalThis.__ic_edge_bundle.default",
+            )
             .map_err(to_runtime_error)?;
-        self.context
-            .eval_global("web.js", web_polyfill::SOURCE)
+        let has_fetch = self
+            .context
+            .eval_global(
+                "app-fetch-contract.js",
+                "typeof globalThis.__ic_edge_app?.fetch === 'function'",
+            )
             .map_err(to_runtime_error)?;
-        self.context
-            .eval_global("web-url.js", web_url_polyfill::SOURCE)
-            .map_err(to_runtime_error)?;
-        self.context
-            .eval_global("web-cache.js", web_cache_polyfill::SOURCE)
-            .map_err(to_runtime_error)?;
-        self.context
-            .eval_global("web-dispatch.js", web_dispatch_polyfill::SOURCE)
-            .map_err(to_runtime_error)?;
-        self.context
-            .eval_global("fetch-queue.js", fetch_queue_polyfill::SOURCE)
-            .map_err(to_runtime_error)?;
+        if has_fetch.to_string() != "true" {
+            return Err(Error::Runtime(
+                "bytecode default export must expose fetch".to_string(),
+            ));
+        }
         Ok(())
     }
 
